@@ -114,9 +114,9 @@ type
     of vTable:
       tableValue*: BoxedValue[Table[Value, Value]]
     of vFunction:
-      functionValue*: BoxedValue[TreeWalkFunction]
+      functionValue*: BoxedValue[TreeWalkProgram]
     of vLinearFunction:
-      linearFunctionValue*: BoxedValue[LinearFunction]
+      linearFunctionValue*: BoxedValue[LinearProgram]
     of vNativeFunction:
       nativeFunctionValue*: proc (args: openarray[Value]): Value {.nimcall.}
     of vExpression:
@@ -250,13 +250,13 @@ type
   Stack* = ref object
     stack*: Array[Value]
 
-  TreeWalkFunction* = object
+  TreeWalkProgram* = object
     stack*: Stack
       ## persistent stack
       ## gets shallow copied when function is run
     instruction*: Instruction
   
-  LinearFunction* = object
+  LinearProgram* = object
     registerCount*: int
     argPositions*: Array[int] ## last is result
     constants*: Array[Value] # XXX (5) serialize values
@@ -294,7 +294,7 @@ type
     of Constant:
       constantValue*: Value
     of FunctionCall:
-      function*: Instruction # evaluates to TreeWalkFunction or native function
+      function*: Instruction # evaluates to TreeWalkProgram or native function
       arguments*: Array[Instruction]
     of Dispatch:
       dispatchFunctions*: Array[(Array[Type], Instruction)]
@@ -429,8 +429,9 @@ type
     variable*: Variable
     value*: Value
 
-  Context* = ref object
+  Module* = ref object
     ## current module or function
+    ## should not contain any "temporary" compilation constructs but it works out that nothing temporary really needs to stay saved
     origin*: Scope
       ## context closure is defined in
     captures*: Table[Variable, int]
@@ -440,7 +441,7 @@ type
   Scope* = ref object
     ## restricted subset of variables in a context
     parent*: Scope
-    context*: Context
+    module*: Module
     imports*: seq[Scope]
     variables*: seq[Variable] ## should not shrink
 
@@ -454,10 +455,6 @@ type
     of Local, Argument, Constant: discard
     of Capture:
       captureIndex*: int
-
-  Module* = object
-    context*: Context # i.e. interface
-    locals*: Stack # i.e. data
 
 static:
   doAssert sizeof(Value) <= 2 * sizeof(int)

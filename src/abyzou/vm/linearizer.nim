@@ -274,15 +274,15 @@ proc resultRegister(fn: LinearContext, res: var Result): Register =
     res.value = result
   of Statement: result = fn.getRegister(Void)
 
-proc linearize*(context: Context, fn: LinearContext, result: var Result, s: Statement) =
+proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statement) =
   type Instr = LinearInstruction
   template value(s: Statement): Register {.callsite.} =
     var res = Result(kind: Value)
-    linearize(context, fn, res, s)
+    linearize(module, fn, res, s)
     res.value
   var statementResult = Result(kind: Statement)
   template statement(s: Statement) {.callsite.} =
-    linearize(context, fn, statementResult, s)
+    linearize(module, fn, statementResult, s)
   let resultKind = result.kind
   case s.kind
   of skNone:
@@ -346,7 +346,7 @@ proc linearize*(context: Context, fn: LinearContext, result: var Result, s: Stat
     let h = s.sequence.len - 1
     for i in 0 ..< h:
       statement(s.sequence[i])
-    linearize(context, fn, result, s.sequence[h])
+    linearize(module, fn, result, s.sequence[h])
   of skVariableGet:
     case result.kind
     of SetRegister:
@@ -386,11 +386,11 @@ proc linearize*(context: Context, fn: LinearContext, result: var Result, s: Stat
     let falseLoc = fn.newJumpLocation()
     fn.add(Instr(kind: IfFalseJump, iffj:
       (cond: value(s.ifCond), falsePos: falseLoc)))
-    linearize(context, fn, branchRes, s.ifTrue)
+    linearize(module, fn, branchRes, s.ifTrue)
     let endLoc = fn.newJumpLocation()
     fn.add(Instr(kind: Jump, jmp: (pos: endLoc)))
     fn.jumpPoint(falseLoc)
-    linearize(context, fn, branchRes, s.ifFalse)
+    linearize(module, fn, branchRes, s.ifFalse)
     fn.jumpPoint(endLoc)
     # XXX (4) maybe later optimize consecutive jump points to 1 jump point
     # like if s.ifFalse is a skNone statement
@@ -400,14 +400,14 @@ proc linearize*(context: Context, fn: LinearContext, result: var Result, s: Stat
     fn.jumpPoint(startLoc)
     fn.add(Instr(kind: IfFalseJump, iffj:
       (cond: value(s.whileCond), falsePos: endLoc)))
-    linearize(context, fn, result, s.whileBody)
+    linearize(module, fn, result, s.whileBody)
     fn.add(Instr(kind: Jump, jmp: (pos: startLoc)))
     fn.jumpPoint(endLoc)
   of skDoUntil:
     let startLoc = fn.newJumpLocation()
     let endLoc = fn.newJumpLocation()
     fn.jumpPoint(startLoc)
-    linearize(context, fn, result, s.doUntilBody)
+    linearize(module, fn, result, s.doUntilBody)
     fn.add(Instr(kind: IfTrueJump, iftj:
       (cond: value(s.doUntilCond), truePos: endLoc)))
     fn.jumpPoint(endLoc)
@@ -416,7 +416,7 @@ proc linearize*(context: Context, fn: LinearContext, result: var Result, s: Stat
   of skHandleEffect:
     fn.add(Instr(kind: PushEffectHandler, pueh:
       (handler: value(s.effectHandler))))
-    linearize(context, fn, result, s.effectBody)
+    linearize(module, fn, result, s.effectBody)
     fn.add(Instr(kind: PopEffectHandler))
   of skTuple:
     # XXX (4) statement shouldn't build collection
@@ -491,36 +491,36 @@ proc linearize*(context: Context, fn: LinearContext, result: var Result, s: Stat
     fn.add(Instr(kind: binaryInstructions[s.binaryInstructionKind], binary:
       (res: res, arg1: value(s.binary1), arg2: value(s.binary2))))
 
-proc createLinearContext*(context: Context): LinearContext =
+proc createLinearContext*(module: Module): LinearContext =
   result = LinearContext()
-  result.variableRegisters.newSeq(context.stackSlots.len + 1)
-  result.constants.newSeq(context.stackSlots.len)
-  for i in 0 ..< context.stackSlots.len:
+  result.variableRegisters.newSeq(module.stackSlots.len + 1)
+  result.constants.newSeq(module.stackSlots.len)
+  for i in 0 ..< module.stackSlots.len:
     let reg = result.newRegister()
     result.variableRegisters[i] = reg
-    if context.stackSlots[i].kind == Local:
+    if module.stackSlots[i].kind == Local:
       # enforce this so that other modules can easily access it:
-      doAssert reg.int == context.stackSlots[i].variable.stackIndex, $(i, reg.int, context.stackSlots[i].variable.stackIndex)
-    if context.stackSlots[i].kind == Argument:
+      doAssert reg.int == module.stackSlots[i].variable.stackIndex, $(i, reg.int, module.stackSlots[i].variable.stackIndex)
+    if module.stackSlots[i].kind == Argument:
       result.argRegisters.add(reg)
     # this might lose performance but is needed for capture arming
-    let defaultValue = context.stackSlots[i].value
-    if defaultValue.kind != vNone or context.stackSlots[i].kind == Capture:
+    let defaultValue = module.stackSlots[i].value
+    if defaultValue.kind != vNone or module.stackSlots[i].kind == Capture:
       result.constants[i] = defaultValue
       result.add(LinearInstruction(kind: LoadConstant, lc:
         (res: reg, constant: Constant(i))))
   result.argRegisters.add(result.newRegister()) # result value
 
-proc linear*(context: Context, body: Statement): LinearContext =
-  result = createLinearContext(context)
+proc linear*(module: Module, body: Statement): LinearContext =
+  result = createLinearContext(module)
   var res = Result(kind: SetRegister, register: result.argRegisters[^1])
-  linearize(context, result, res, body)
+  linearize(module, result, res, body)
 
-proc toFunction*(lc: LinearContext): LinearFunction =
+proc toFunction*(lc: LinearContext): LinearProgram =
   var ap = initArray[int](lc.argRegisters.len)
   for i in 0 ..< lc.argRegisters.len:
     ap[i] = lc.argRegisters[i].int
-  result = LinearFunction(
+  result = LinearProgram(
     registerCount: lc.registerCount,
     argPositions: ap,
     constants: toArray(lc.constants),

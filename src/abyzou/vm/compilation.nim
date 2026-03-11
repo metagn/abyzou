@@ -3,7 +3,7 @@ import
   ../defines,
   ../language/[expressions, number, shortstring],
   ./[ids, primitives, arrays, typebasics, typematch,
-    valueconstr, guesstype, treewalk, linearizer, functions]
+    valueconstr, guesstype, treewalk, linearizer, programs]
 
 defineTypeBase Meta, TypeBase(name: "Meta",
   arguments: @[newTypeParameter("", +Type(kind: tyBase, typeBase: FunctionTy))])
@@ -11,44 +11,44 @@ defineTypeBase Meta, TypeBase(name: "Meta",
 proc newVariable*(name: string, knownType: Type = NoType): Variable =
   Variable(id: newVariableId(), name: name, nameHash: name.hash, knownType: knownType)
 
-proc newContext*(parent: Scope = nil, imports: seq[Scope] = @[]): Context =
-  result = Context(origin: parent)
-  result.top = Scope(context: result, imports: imports)
+proc newModule*(parent: Scope = nil, imports: seq[Scope] = @[]): Module =
+  result = Module(origin: parent)
+  result.top = Scope(module: result, imports: imports)
 
-proc childContext*(scope: Scope): Context =
-  result = newContext(parent = scope)
+proc childModule*(scope: Scope): Module =
+  result = newModule(parent = scope)
 
 proc childScope*(scope: Scope): Scope =
-  result = Scope(parent: scope, context: scope.context)
+  result = Scope(parent: scope, module: scope.module)
 
-proc makeStack*(context: Context): Stack =
-  result = Stack(stack: initArray[Value](context.stackSlots.len))
-  for i in 0 ..< context.stackSlots.len:
-    result.stack[i] = context.stackSlots[i].value
+proc makeStack*(module: Module): Stack =
+  result = Stack(stack: initArray[Value](module.stackSlots.len))
+  for i in 0 ..< module.stackSlots.len:
+    result.stack[i] = module.stackSlots[i].value
 
-proc fillStack(context: Context, stack: Stack) =
+proc fillStack(module: Module, stack: Stack) =
   for i in 0 ..< stack.stack.len:
-    context.stackSlots[i].value = stack.stack[i]
+    module.stackSlots[i].value = stack.stack[i]
 
-template withStack*(context: Context, body) =
-  let stack {.inject.} = makeStack(context)
+template withStack*(module: Module, body) =
+  let stack {.inject.} = makeStack(module)
   body
-  fillStack(context, stack)
+  fillStack(module, stack)
 
-proc evaluateStatic*(context: Context, instr: Instruction): Value =
-  context.withStack:
+proc evaluateStatic*(module: Module, instr: Instruction): Value =
+  module.withStack:
     result = instr.evaluate(stack)
 
 proc define*(scope: Scope, variable: Variable, kind = Local) =
   variable.scope = scope
-  variable.stackIndex = scope.context.stackSlots.len
-  scope.context.stackSlots.add(
+  variable.stackIndex = scope.module.stackSlots.len
+  scope.module.stackSlots.add(
     StackSlot(kind: kind, variable: variable))
   scope.variables.add(variable)
 
-proc set*(context: Context, variable: Variable, value: sink Value) =
-  assert variable.scope.context == context
-  context.stackSlots[variable.stackIndex].value = value
+proc set*(module: Module, variable: Variable, value: sink Value) =
+  assert variable.scope.module == module
+  module.stackSlots[variable.stackIndex].value = value
 
 proc toInstruction*(st: Statement): Instruction =
   template map[T](s: T): T =
@@ -138,12 +138,12 @@ type
 proc compile*(scope: Scope, ex: Expression, bound: TypeBound): Statement
 
 proc evaluateStatic*(scope: Scope, ex: Expression, bound: TypeBound = +AnyTy): Value =
-  scope.context.evaluateStatic(scope.compile(ex, bound).toInstruction)
+  scope.module.evaluateStatic(scope.compile(ex, bound).toInstruction)
 
 proc setStatic*(variable: Variable, expression: Expression) =
   let value = variable.scope.compile(expression, +variable.knownType)
   variable.knownType = value.knownType
-  variable.scope.context.withStack:
+  variable.scope.module.withStack:
     stack.set(variable.stackIndex, value.toInstruction.evaluate(stack))
   variable.evaluated = true
 
@@ -160,8 +160,8 @@ proc symbols*(scope: Scope, name: string, bound: TypeBound,
   if scope.isNil: return
   if not scope.parent.isNil:
     result.add(symbols(scope.parent, name, bound, nameHash = nameHash))
-  elif not scope.context.origin.isNil:
-    for a in symbols(scope.context.origin, name, bound, nameHash = nameHash):
+  elif not scope.module.origin.isNil:
+    for a in symbols(scope.module.origin, name, bound, nameHash = nameHash):
       let b =
         if a.kind == VariableReferenceKind.Constant:
           a
@@ -200,23 +200,23 @@ proc overloads*(scope: Scope, name: string, bound: TypeBound): seq[VariableRefer
     order = if bound.variance == Covariant: Ascending else: Descending)
   result.reverse()
 
-proc capture*(c: Context, v: Variable): int =
-  if v.scope.context == c:
+proc capture*(c: Module, v: Variable): int =
+  if v.scope.module == c:
     result = v.stackIndex
   else:
     if not c.origin.isNil:
-      discard c.origin.context.capture(v)
+      discard c.origin.module.capture(v)
     result = c.captures.mgetOrPut(v, c.stackSlots.len)
     c.stackSlots.add(
       StackSlot(kind: Capture, variable: v,
-        value: v.scope.context.stackSlots[v.stackIndex].value))
+        value: v.scope.module.stackSlots[v.stackIndex].value))
 
-proc variableGet*(c: Context, r: VariableReference): Statement =
+proc variableGet*(c: Module, r: VariableReference): Statement =
   let t = r.type
   case r.kind
   of Constant:
     result = Statement(kind: skConstant,
-      constant: r.variable.scope.context.stackSlots[r.variable.stackIndex].value,
+      constant: r.variable.scope.module.stackSlots[r.variable.stackIndex].value,
       knownType: t)
   of Local, Argument:
     result = Statement(kind: skVariableGet,
@@ -227,7 +227,7 @@ proc variableGet*(c: Context, r: VariableReference): Statement =
       variableGetIndex: c.capture(r.variable),
       knownType: t)
 
-proc variableSet*(c: Context, r: VariableReference, value: Statement, source: Expression = nil): Statement =
+proc variableSet*(c: Module, r: VariableReference, value: Statement, source: Expression = nil): Statement =
   let t = r.type
   case r.kind
   of Local, Argument:
@@ -414,9 +414,9 @@ proc compileMetaCall*(scope: Scope, name: string, ex: Expression, bound: TypeBou
         else:
           arguments[i + 1] = constant(copy ex.arguments[i], ExpressionTy)
       let call = Statement(kind: skFunctionCall,
-        callee: variableGet(scope.context, meta),
+        callee: variableGet(scope.module, meta),
         arguments: arguments).toInstruction
-      result = scope.context.evaluateStatic(call).statementValue
+      result = scope.module.evaluateStatic(call).statementValue
     elif subMetas.len != 0:
       # XXX (8) sub meta dispatch, needs better output and described semantics
       var argumentValues = newSeq[Variable](ex.arguments.len)
@@ -460,9 +460,9 @@ proc compileMetaCall*(scope: Scope, name: string, ex: Expression, bound: TypeBou
         var argumentStatement = newSeq[Statement](arguments.len)
         for i, a in arguments: argumentStatement[i] = constant(a, a.getType)
         let call = Statement(kind: skFunctionCall,
-          callee: variableGet(scope.context, d),
+          callee: variableGet(scope.module, d),
           arguments: argumentStatement).toInstruction
-        let body = scope.context.evaluateStatic(call).statementValue
+        let body = scope.module.evaluateStatic(call).statementValue
         var operands: seq[Statement]
         for i, checkType in variableCheckTypes:
           if not checkType.isNoType:
@@ -544,7 +544,7 @@ proc compileRuntimeCall*(scope: Scope, ex: Expression, bound: TypeBound,
               argTypes[j] = AnyTy
             else:
               argTypes[j] = pt
-          result.dispatchees[i] = (argTypes, variableGet(scope.context, subs[i]))
+          result.dispatchees[i] = (argTypes, variableGet(scope.module, subs[i]))
           result.knownType = commonSuperType(result.knownType, t.baseArguments[1])
             # could allow union here
 
@@ -566,7 +566,7 @@ proc compileCall*(scope: Scope, ex: Expression, bound: TypeBound,
       functionType = funcType(if bound.variance == Contravariant: AnyTy else: bound.boundType, argumentTypes)
       let overs = overloads(scope, ".call", -functionType)
       if overs.len != 0:
-        let dotCall = variableGet(scope.context, overs[0])
+        let dotCall = variableGet(scope.module, overs[0])
         result = Statement(kind: skFunctionCall,
           knownType: dotCall.knownType.baseArguments[1],
           callee: callee,
@@ -683,7 +683,7 @@ proc compile*(scope: Scope, ex: Expression, bound: TypeBound): Statement =
   of Name, Symbol:
     # XXX warn on ambiguity, thankfully recency is accounted for
     let name = if ex.kind == Symbol: $ex.symbol else: ex.identifier
-    result = variableGet(scope.context, resolve(scope, ex, name, bound))
+    result = variableGet(scope.module, resolve(scope, ex, name, bound))
   of Dot:
     if ex.right.kind == Name:
       let lhs = map ex.left
@@ -722,13 +722,13 @@ proc compile*(scope: Scope, ex: Expression, bound: TypeBound): Statement =
       msg: "bound " & $bound & " does not match type " & $result.knownType &
         " in expression " & $ex)
 
-proc compileAsFunction*(ex: Expression, imports: seq[Scope], bound: TypeBound = +AnyTy): Function =
-  var context = newContext(imports = imports)
-  let body = compile(context.top, ex, bound)
+proc compile*(ex: Expression, imports: seq[Scope], bound: TypeBound = +AnyTy): Program =
+  var module = newModule(imports = imports)
+  let body = compile(module.top, ex, bound)
   if useBytecode:
-    let lc = linear(context, body)
-    result = Function(kind: Linear, linear: lc.toFunction())
+    let lc = linear(module, body)
+    result = Program(kind: Linear, linear: lc.toFunction())
   else:
-    result = Function(kind: TreeWalk, tw: TreeWalkFunction(
+    result = Program(kind: TreeWalk, tw: TreeWalkProgram(
       instruction: body.toInstruction,
-      stack: makeStack(context)))
+      stack: makeStack(module)))

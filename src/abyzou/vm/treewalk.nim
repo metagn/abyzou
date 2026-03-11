@@ -29,7 +29,7 @@ template runCheckEffect(instr: Instruction, stack, effectHandler): Value =
     return val
   val
 
-proc call*(fun: TreeWalkFunction, args: sink Array[Value], effectHandler: EffectHandler = nil): Value {.inline.} =
+proc call*(fun: TreeWalkProgram, args: sink Array[Value], effectHandler: EffectHandler = nil): Value {.inline.} =
   var newStack = fun.stack.shallowRefresh()
   for i in 0 ..< args.len:
     newStack.set(i, args[i])

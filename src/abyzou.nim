@@ -6,15 +6,15 @@ proc parse*(str: string): Expression =
   result = parser.parse(tokenizer)
 
 when not defined(js) and not defined(nimscript):
-  import abyzou/vm/[compilation, primitives, functions], abyzou/library/prelude
+  import abyzou/vm/[compilation, primitives, programs], abyzou/library/prelude
 
   let Prelude* = prelude()
 
-  proc compileAsFunction*(code: string, libraries = @[Prelude]): Function =
-    compileAsFunction(parse(code), libraries)
+  proc compile*(code: string, libraries = @[Prelude]): Program =
+    compile(parse(code), libraries)
 
   proc evaluate*(code: string): Value =
-    run(compileAsFunction(code))
+    run(compile(code))
 
   when isMainModule and appType in ["lib", "staticlib"]:
     type Binary* {.exportc, bycopy.} = object

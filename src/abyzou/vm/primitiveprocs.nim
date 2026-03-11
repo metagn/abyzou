@@ -175,9 +175,9 @@ proc `$`*(variable: Variable): string =
 
 proc `$`*(scope: Scope): string
 
-proc `$`*(context: Context): string =
-  result = "context\n"
-  for v in context.stackSlots:
+proc `$`*(module: Module): string =
+  result = "module\n"
+  for v in module.stackSlots:
     let prefix =
       case v.kind
       of Capture:
@@ -190,7 +190,7 @@ proc `$`*(context: Context): string =
         "  "
     result.add(prefix & $v.variable & "\n")
   result.add("parent\n")
-  for line in splitLines($context.origin):
+  for line in splitLines($module.origin):
     result.add("  " & line & "\n")
 
 proc `$`*(scope: Scope): string =

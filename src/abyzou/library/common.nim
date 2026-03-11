@@ -10,15 +10,15 @@ proc define*(scope: Scope, n: string, typ: Type): Variable =
 proc define*(scope: Scope, n: string, typ: Type, x: sink Value) =
   let variable = define(scope, n, typ)
   setTypeIfBoxed(x, typ)
-  scope.context.set(variable, x)
+  scope.module.set(variable, x)
 
-proc define*(context: Context, n: string, typ: Type): Variable {.inline.} =
-  context.top.define(n, typ)
+proc define*(module: Module, n: string, typ: Type): Variable {.inline.} =
+  module.top.define(n, typ)
 
-proc define*(context: Context, n: string, typ: Type, x: sink Value) =
-  let variable = define(context, n, typ)
+proc define*(module: Module, n: string, typ: Type, x: sink Value) =
+  let variable = define(module, n, typ)
   setTypeIfBoxed(x, typ)
-  context.set(variable, x)
+  module.set(variable, x)
 
 proc templType*(arity: int): Type {.inline.} =
   var args = newSeq[Type](arity + 1)
@@ -70,7 +70,7 @@ template doFn*(body): untyped =
 
 template module*(moduleName, definitions): untyped {.dirty.} =
   proc `moduleName`*: Scope =
-    result = newContext().top
+    result = newModule().top
     template define(n: string, typ: Type, x: Value) {.used.} =
       define(result, n, typ, x)
     template define(n: string, x: Value) {.used.} =

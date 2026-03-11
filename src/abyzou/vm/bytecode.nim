@@ -4,13 +4,13 @@
 import ./[primitives, linearizer, arrays, guesstype, checktype, typebasics, valueconstr],
   std/[sets, tables]
 
-proc call*(lf: LinearFunction, args: openarray[Value]): Value
+proc call*(lf: LinearProgram, args: openarray[Value]): Value
 
 when not declared(EffectHandler):
   import ./treewalk
 {.pop.}
 
-proc runOnStack*(lf: LinearFunction, stack: var Array[Value], effectPos: int) =
+proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
   var registers = move stack
   defer: stack = move registers
   template put(reg: Register, val: Value) =
@@ -397,7 +397,7 @@ proc runOnStack*(lf: LinearFunction, stack: var Array[Value], effectPos: int) =
       let a = get(instr.unary.arg).unboxStripType.float32Value
       put instr.unary.res, toValue(-a)
 
-proc call*(lf: LinearFunction, args: openarray[Value]): Value =
+proc call*(lf: LinearProgram, args: openarray[Value]): Value =
   var registers = initArray[Value](lf.registerCount)
   
   assert lf.argPositions.len == args.len + 1, $(lf.argPositions, args.len)
