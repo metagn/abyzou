@@ -23,7 +23,7 @@ proc define*(module: Module, n: string, typ: Type, x: sink Value) =
 proc templType*(arity: int): Type {.inline.} =
   var args = newSeq[Type](arity + 1)
   var bArgs = newSeq[Type](arity)
-  args[0] = ScopeTy
+  args[0] = ContextTy
   for i in 0 ..< arity:
     args[i + 1] = ExpressionTy
     bArgs[i] = AnyTy
@@ -32,7 +32,7 @@ proc templType*(arity: int): Type {.inline.} =
 
 template doTempl*(body): untyped =
   (proc (valueArgs: openarray[Value]): Value {.nimcall.} =
-    let scope {.inject, used.} = valueArgs[0].scopeValue
+    let context {.inject, used.} = valueArgs[0].contextValue.value
     var args {.inject.} = newSeq[Expression](valueArgs.len - 1)
     for i in 0 ..< args.len:
       args[i] = valueArgs[i + 1].expressionValue
@@ -41,7 +41,7 @@ template doTempl*(body): untyped =
 proc typedTemplType*(arity: int): Type {.inline.} =
   var args = newSeq[Type](arity + 1)
   var bArgs = newSeq[Type](arity)
-  args[0] = ScopeTy
+  args[0] = ContextTy
   for i in 0 ..< arity:
     args[i + 1] = StatementTy
     bArgs[i] = AnyTy
@@ -50,7 +50,7 @@ proc typedTemplType*(arity: int): Type {.inline.} =
 
 proc typedTemplType*(realArgs: openarray[Type], returnType: Type): Type {.inline.} =
   var args = newSeq[Type](realArgs.len + 1)
-  args[0] = ScopeTy
+  args[0] = ContextTy
   for i in 0 ..< realArgs.len:
     args[i + 1] = StatementTy
   result = funcType(StatementTy, args)
@@ -58,7 +58,7 @@ proc typedTemplType*(realArgs: openarray[Type], returnType: Type): Type {.inline
 
 template doTypedTempl*(body): untyped =
   (proc (valueArgs: openarray[Value]): Value {.nimcall.} =
-    let scope {.inject, used.} = valueArgs[0].scopeValue
+    let context {.inject, used.} = valueArgs[0].contextValue.value
     var args {.inject.} = newSeq[Statement](valueArgs.len - 1)
     for i in 0 ..< args.len:
       args[i] = valueArgs[i + 1].statementValue

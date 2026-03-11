@@ -8,11 +8,11 @@ import common
 
 module syntax:
   templ "block", 1:
-    let sc = scope.childScope()
+    let sc = context.scope.childScope()
     result = toValue sc.compile(args[0], +AnyTy)
   templ "static", 1:
-    let st = scope.compile(args[0], +AnyTy)
-    result = toValue constant(scope.module.evaluateStatic(st.toInstruction), st.knownType)
+    let st = context.scope.compile(args[0], +AnyTy)
+    result = toValue constant(context.scope.module.evaluateStatic(st.toInstruction), st.knownType)
   
   # XXX (2) generic assignments or functions
   proc makeFn(scope: Scope, arguments: seq[Expression], body: Expression,
@@ -59,6 +59,7 @@ module syntax:
       armStackCaptures: captures)
 
   templ "=>", 2:
+    let scope = context.scope
     var lhs = args[0]
     var body = args[1]
     let (bound, typeSet) =
@@ -78,6 +79,7 @@ module syntax:
     result = toValue makeFn(scope, arguments, body, name, bound, typeSet)
   templ ":=", 2:
     # generics?
+    let scope = context.scope
     var lhs = args[0]
     let rhs = args[1]
     let (bound, typeSet) =
@@ -97,6 +99,7 @@ module syntax:
       result = toValue makeFn(scope, lhs.arguments, rhs, $lhs.address, bound, typeSet)
     else: assert false, $lhs
   templ "=", 2:
+    let scope = context.scope
     var lhs = args[0]
     let rhs = args[1]
     let (bound, typeSet) =

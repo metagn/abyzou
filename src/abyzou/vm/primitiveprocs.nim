@@ -129,7 +129,7 @@ proc `$`*(value: Value): string =
   of vTable: $value.tableValue.value
   of vExpression: $value.expressionValue[]
   of vStatement: $value.statementValue[]
-  of vScope: $value.scopeValue[]
+  of vContext: $value.contextValue.value
 
 proc `$`*(p: TypeBase): string {.inline.} = p.name
 

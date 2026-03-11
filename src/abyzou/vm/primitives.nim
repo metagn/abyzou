@@ -44,7 +44,7 @@ type
     # could be pointers or serialized but for now this is more efficient:
     vExpression
     vStatement
-    vScope
+    vContext
     vBoxed
       ## boxed version of unboxed values, used for type info
     vInt64, vUint64, vFloat64
@@ -123,8 +123,8 @@ type
       expressionValue*: Expression
     of vStatement:
       statementValue*: Statement
-    of vScope:
-      scopeValue*: Scope
+    of vContext:
+      contextValue*: BoxedValue[Context]
   
   PointerTaggedValue* = distinct (
     when pointerTaggable:
@@ -191,7 +191,7 @@ type
     ntyString,
     ntySet,
     ntyTable,
-    ntyExpression, ntyStatement, ntyScope,
+    ntyExpression, ntyStatement, ntyContext,
     ntyType,
     # typeclass
     ntyTupleConstructor
@@ -212,7 +212,7 @@ type
     bound*: TypeBound
 
   Type* = object
-    # XXX (2) 90 bytes
+    # XXX (2) 90 bytes - change these tables out for something smaller
     # XXX (2) figure out which kinds to merge with tyInstance (XXX (1) at least tyTuple)
     properties*: Table[TypeBase, Type]
       # can be a multitable later on
@@ -456,13 +456,23 @@ type
     of Capture:
       captureIndex*: int
 
+  Context* = object
+    ## statement compilation context
+    scope*: Scope
+    bound*: TypeBound
+
 static:
   doAssert sizeof(Value) <= 2 * sizeof(int)
+
+when false: {.hint: $(sizeof(Context), sizeof(TypeBound), sizeof(Variance), sizeof(Type)).}
 
 proc isNoType*(t: Type): bool = t.kind == tyNoType
 proc isNoType*(vt: Box[Type]): bool = vt.isNil or vt.unbox.isNoType
 template tupleValue*(v: Value): untyped =
   v.arrayValue
+
+# for now clashes with `module` macro for libraries
+#proc module*(c: Context): Module {.inline.} = c.scope.module
 
 import ./primitiveprocs
 export primitiveprocs

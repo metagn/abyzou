@@ -53,7 +53,7 @@ proc checkType*(value: Value, t: Type): bool =
       value.kind == vTable and (t.kind == tyBase or value.tableValue.value.eachAreTable(t.baseArguments[0], t.baseArguments[1]))
     of ntyExpression: value.kind == vExpression
     of ntyStatement: value.kind == vStatement
-    of ntyScope: value.kind == vScope
+    of ntyContext: value.kind == vContext
     else:
       not b.valueMatcher.isNil and
         b.valueMatcher(value, t)

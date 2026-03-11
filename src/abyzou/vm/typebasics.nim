@@ -62,7 +62,7 @@ nativeAtomicType Float64
 nativeAtomicType String
 nativeAtomicType Expression
 nativeAtomicType Statement
-nativeAtomicType Scope
+nativeAtomicType Context
 nativeType Reference, [+AnyTy]
 nativeType List, [+AnyTy]
 nativeType Set, [+AnyTy]

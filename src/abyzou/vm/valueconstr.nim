@@ -48,7 +48,7 @@ proc toValue*(x: TreeWalkProgram): Value = withkindbox(function, x)
 proc toValue*(x: LinearProgram): Value = withkindbox(linearFunction, x)
 proc toValue*(x: Expression): Value = withkind(expression, x)
 proc toValue*(x: Statement): Value = withkind(statement, x)
-proc toValue*(x: Scope): Value = withkind(scope, x)
+proc toValue*(x: Context): Value = withkindbox(context, x)
 
 proc unboxStripType*(x: Value): Value {.inline.} =
   if x.kind == vBoxed: result = x.boxedValue.value
@@ -110,7 +110,7 @@ when false:
         newArray[i] = copy value.tupleValue.unref[i]
       toValue(newArray)
     of vEffect, vReference, vBoxed,
-      vSet, vTable, vExpression, vStatement, vScope:
+      vSet, vTable, vExpression, vStatement, vContext:
       # unimplemented
       value
 
@@ -138,7 +138,7 @@ when false:
         of vTable: fromPtr table
         of vExpression: fromPtr expression
         of vStatement: fromPtr statement
-        of vScope: fromPtr scope
+        of vContext: fromPtr context
     else:
       v.PointerTaggedValue
 
@@ -165,6 +165,6 @@ when false:
       of vTable: castPointer table
       of vExpression: castPointer expression
       of vStatement: castPointer statement
-      of vScope: castPointer scope
+      of vContext: castPointer context
     else:
       p.ValueObj

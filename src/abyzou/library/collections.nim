@@ -25,11 +25,11 @@ module collections:
     result.module.set upd, toValue proc (args: openarray[Value]): Value =
       args[0].referenceValue.realRef[] = args[1]
   # XXX (8) maybe move this to compilation, or allow dynamic dispatch of .[] some other way
-  define ".[]", funcType(StatementTy, [ScopeTy, StatementTy, StatementTy]).withProperties(
+  define ".[]", funcType(StatementTy, [ContextTy, StatementTy, StatementTy]).withProperties(
     property(Meta, funcType(AnyTy, [Type(kind: tyBase, typeBase: TupleTy), Int32Ty]))
   ), toValue proc (valueArgs: openarray[Value]): Value =
-    let scope = valueArgs[0].scopeValue
-    let index = scope.module.evaluateStatic(valueArgs[2].statementValue.toInstruction)
+    let context = valueArgs[0].contextValue.value
+    let index = context.scope.module.evaluateStatic(valueArgs[2].statementValue.toInstruction)
     let nthType = valueArgs[1].statementValue.knownType.nth(index.int32Value)
     result = toValue Statement(kind: skGetIndex,
       knownType: nthType,

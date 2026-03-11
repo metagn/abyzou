@@ -346,11 +346,9 @@ proc compileMetaCall*(scope: Scope, name: string, ex: Expression, bound: TypeBou
   result = nil
   var argumentTypes = newSeq[Type](ex.arguments.len)
   for t in argumentTypes.mitems: t = AnyTy
-  # XXX (7) pass type bound as well as scope, to pass both to a compile proc
-  # maybe by passing a meta call context object
   # XXX (7) validate output statement
   var realArgumentTypes = newSeq[Type](ex.arguments.len + 1)
-  realArgumentTypes[0] = ScopeTy
+  realArgumentTypes[0] = ContextTy
   for i in 1 ..< realArgumentTypes.len:
     realArgumentTypes[i] = union(ExpressionTy, StatementTy)
   # get all metas first and type statements accordingly
@@ -407,7 +405,7 @@ proc compileMetaCall*(scope: Scope, name: string, ex: Expression, bound: TypeBou
       let meta = superMetas[0]
       let ty = meta.type
       var arguments = newSeq[Statement](ex.arguments.len + 1)
-      arguments[0] = constant(scope, ScopeTy)
+      arguments[0] = constant(Context(scope: scope, bound: bound), ContextTy)
       for i in 0 ..< ex.arguments.len:
         if matchBound(+StatementTy, ty.param(i + 1)):
           arguments[i + 1] = constant(argumentStatements[i], StatementTy)
@@ -423,7 +421,7 @@ proc compileMetaCall*(scope: Scope, name: string, ex: Expression, bound: TypeBou
       var dispatches: seq[tuple[condition, body: Statement]]
       for d in subMetas:
         var arguments = initArray[Value](ex.arguments.len + 1)
-        arguments[0] = toValue scope
+        arguments[0] = toValue Context(scope: scope, bound: bound)
         var variableCheckTypes = newSeq[Type](ex.arguments.len)
         var noMatch = false
         let metaTy = d.type.properties[Meta].baseArguments[0].baseArguments[0]
@@ -721,6 +719,10 @@ proc compile*(scope: Scope, ex: Expression, bound: TypeBound): Statement =
       type: result.knownType,
       msg: "bound " & $bound & " does not match type " & $result.knownType &
         " in expression " & $ex)
+
+proc compile*(context: Context, ex: Expression): Statement {.inline.} =
+  # context object is huge so dont use it yet
+  result = compile(context.scope, ex, context.bound)
 
 proc compile*(ex: Expression, imports: seq[Scope], bound: TypeBound = +AnyTy): Program =
   var module = newModule(imports = imports)

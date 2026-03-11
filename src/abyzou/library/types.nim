@@ -14,7 +14,7 @@ module types:
   typedTempl "cast", [AnyTy, TypeTy[AnyTy]], AnyTy:
     let newStmt = new(Statement)
     newStmt[] = args[0][]
-    newStmt.knownType = scope.module.evaluateStatic(args[1].toInstruction).typeValue.type.unwrapTypeType
+    newStmt.knownType = context.scope.module.evaluateStatic(args[1].toInstruction).typeValue.type.unwrapTypeType
     result = toValue newStmt
   {.pop.}
   when false:

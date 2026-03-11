@@ -12,7 +12,7 @@ module logic:
     toValue not args[0].boolValue
   # these don't need to be varargs, they just are to make sure varargs work
   define "and",
-    funcTypeWithVarargs(StatementTy, [ScopeTy], StatementTy).withProperties(
+    funcTypeWithVarargs(StatementTy, [ContextTy], StatementTy).withProperties(
       property(Meta, funcTypeWithVarargs(BoolTy, [], BoolTy))),
     toValue proc (valueArgs: openarray[Value]): Value =
       var res = valueArgs[^1].statementValue
@@ -25,7 +25,7 @@ module logic:
             knownType: BoolTy)
       result = toValue res
   define "or",
-    funcTypeWithVarargs(StatementTy, [ScopeTy], StatementTy).withProperties(
+    funcTypeWithVarargs(StatementTy, [ContextTy], StatementTy).withProperties(
       property(Meta, funcTypeWithVarargs(BoolTy, [], BoolTy))),
     toValue proc (valueArgs: openarray[Value]): Value =
       var res = valueArgs[^1].statementValue
@@ -39,21 +39,23 @@ module logic:
       result = toValue res
   fn "xor", [BoolTy, BoolTy], BoolTy:
     toValue(args[0].boolValue xor args[1].boolValue)
-  define "if", funcType(StatementTy, [ScopeTy, StatementTy, ExpressionTy]).withProperties(
+  define "if", funcType(StatementTy, [ContextTy, StatementTy, ExpressionTy]).withProperties(
     property(Meta, funcType(AnyTy, [BoolTy, AnyTy]))
   ), toValue proc (valueArgs: openarray[Value]): Value =
-    let sc = valueArgs[0].scopeValue.childScope()
+    let context = valueArgs[0].contextValue.value
+    let sc = context.scope.childScope()
     result = toValue Statement(kind: skIf,
       ifCond: valueArgs[1].statementValue,
       ifTrue: sc.compile(valueArgs[2].expressionValue, +AnyTy),
       ifFalse: Statement(kind: skNone))
-  define "if", funcType(StatementTy, [ScopeTy, StatementTy, ExpressionTy, ExpressionTy]).withProperties(
+  define "if", funcType(StatementTy, [ContextTy, StatementTy, ExpressionTy, ExpressionTy]).withProperties(
     property(Meta, funcType(AnyTy, [BoolTy, AnyTy, AnyTy]))
   ), toValue proc (valueArgs: openarray[Value]): Value = 
     var els = valueArgs[3].expressionValue
     if els.kind == Colon and els.left.isIdentifier(ident) and ident == "else":
       els = els.right
-    let scope = valueArgs[0].scopeValue
+    let context = valueArgs[0].contextValue.value
+    let scope = context.scope
     let sc = scope.childScope()
     let elsesc = scope.childScope()
     var res = Statement(kind: skIf,
@@ -62,10 +64,10 @@ module logic:
       ifFalse: elsesc.compile(els, +AnyTy))
     res.knownType = commonSuperType(res.ifTrue.knownType, res.ifFalse.knownType)
     result = toValue(res)
-  define "while", funcType(StatementTy, [ScopeTy, StatementTy, ExpressionTy]).withProperties(
+  define "while", funcType(StatementTy, [ContextTy, StatementTy, ExpressionTy]).withProperties(
     property(Meta, funcType(NoneValueTy, [BoolTy, AnyTy]))
   ), toValue proc (valueArgs: openarray[Value]): Value = 
-    let sc = valueArgs[0].scopeValue.childScope()
+    let sc = valueArgs[0].contextValue.value.scope.childScope()
     result = toValue Statement(kind: skWhile,
       whileCond: valueArgs[1].statementValue,
       whileBody: sc.compile(valueArgs[2].expressionValue, -AllTy))
