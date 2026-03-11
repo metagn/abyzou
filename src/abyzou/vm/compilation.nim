@@ -3,7 +3,7 @@ import
   ../defines,
   ../language/[expressions, number, shortstring],
   ./[ids, primitives, arrays, typebasics, typematch,
-    valueconstr, guesstype, treewalk, linearizer]
+    valueconstr, guesstype, treewalk, linearizer, functions]
 
 defineTypeBase Meta, TypeBase(name: "Meta",
   arguments: @[newTypeParameter("", +Type(kind: tyBase, typeBase: FunctionTy))])
@@ -722,25 +722,13 @@ proc compile*(scope: Scope, ex: Expression, bound: TypeBound): Statement =
       msg: "bound " & $bound & " does not match type " & $result.knownType &
         " in expression " & $ex)
 
-type
-  ProgramKind* = enum Linear, TreeWalk
-  Program* = object
-    case kind*: ProgramKind
-    of Linear: linear*: LinearFunction
-    of TreeWalk: tw*: TreeWalkFunction
-
-proc compile*(ex: Expression, imports: seq[Scope], bound: TypeBound = +AnyTy): Program =
+proc compileAsFunction*(ex: Expression, imports: seq[Scope], bound: TypeBound = +AnyTy): Function =
   var context = newContext(imports = imports)
   let body = compile(context.top, ex, bound)
   if useBytecode:
     let lc = linear(context, body)
-    result = Program(kind: Linear, linear: lc.toFunction())
+    result = Function(kind: Linear, linear: lc.toFunction())
   else:
-    result = Program(kind: TreeWalk, tw: TreeWalkFunction(
+    result = Function(kind: TreeWalk, tw: TreeWalkFunction(
       instruction: body.toInstruction,
       stack: makeStack(context)))
-
-proc run*(program: Program, effectHandler: EffectHandler = nil): Value =
-  case program.kind
-  of TreeWalk: evaluate(program.tw.instruction, program.tw.stack, effectHandler)
-  of Linear: run(program.linear, [])

@@ -455,6 +455,10 @@ type
     of Capture:
       captureIndex*: int
 
+  Module* = object
+    context*: Context # i.e. interface
+    locals*: Stack # i.e. data
+
 static:
   doAssert sizeof(Value) <= 2 * sizeof(int)
 

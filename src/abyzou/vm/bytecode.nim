@@ -1,14 +1,18 @@
 # bytecode interpreter
+
 {.push hint[DuplicateModuleImport]: off.}
 import ./[primitives, linearizer, arrays, guesstype, checktype, typebasics, valueconstr],
   std/[sets, tables]
+
+proc call*(lf: LinearFunction, args: openarray[Value]): Value
 
 when not declared(EffectHandler):
   import ./treewalk
 {.pop.}
 
-proc run*(lf: LinearFunction, args: openarray[Value]): Value =
-  var registers = initArray[Value](lf.registerCount)
+proc runOnStack*(lf: LinearFunction, stack: var Array[Value], effectPos: int) =
+  var registers = move stack
+  defer: stack = move registers
   template put(reg: Register, val: Value) =
     registers[reg.int32] = val
   template get(reg: Register): Value =
@@ -17,10 +21,6 @@ proc run*(lf: LinearFunction, args: openarray[Value]): Value =
     registers[reg.int32]
   template mov(src, dest: Register) =
     registers[dest.int32] = registers[src.int32]
-  
-  assert lf.argPositions.len == args.len + 1, $(lf.argPositions, args.len)
-  for i in 0 ..< args.len:
-    registers[lf.argPositions[i]] = args[i]
 
   var
     effectHandlers: seq[EffectHandler]
@@ -71,7 +71,7 @@ proc run*(lf: LinearFunction, args: openarray[Value]): Value =
     if val.kind == vEffect:
       let eff = val.effectValue.unref
       if effectHandler.isNil or not effectHandler(eff):
-        result = val
+        registers[effectPos] = val
         unhandledEffect = true
 
   while i < instructions.len:
@@ -102,7 +102,7 @@ proc run*(lf: LinearFunction, args: openarray[Value]): Value =
             default(Array[Value]),
             effectHandler)
         of vLinearFunction:
-          fn.linearFunctionValue.value.run([])
+          fn.linearFunctionValue.value.call([])
         else: raiseAssert("cannot call " & $fn)
       checkEffect val
       put instr.ncall.res, val
@@ -119,7 +119,7 @@ proc run*(lf: LinearFunction, args: openarray[Value]): Value =
             toArray([get instr.ucall.arg1]),
             effectHandler)
         of vLinearFunction:
-          fn.linearFunctionValue.value.run([get instr.ucall.arg1])
+          fn.linearFunctionValue.value.call([get instr.ucall.arg1])
         else: raiseAssert("cannot call " & $fn)
       checkEffect val
       put instr.ucall.res, val
@@ -134,7 +134,7 @@ proc run*(lf: LinearFunction, args: openarray[Value]): Value =
         of vFunction:
           fn.functionValue.value.call(toArray(args), effectHandler)
         of vLinearFunction:
-          fn.linearFunctionValue.value.run(args)
+          fn.linearFunctionValue.value.call(args)
         else: raiseAssert("cannot call " & $fn)
       checkEffect val
       put instr.bcall.res, val
@@ -149,7 +149,7 @@ proc run*(lf: LinearFunction, args: openarray[Value]): Value =
         of vFunction:
           fn.functionValue.value.call(toArray(args), effectHandler)
         of vLinearFunction:
-          fn.linearFunctionValue.value.run(args)
+          fn.linearFunctionValue.value.call(args)
         else: raiseAssert("cannot call " & $fn)
       checkEffect val
       put instr.tcall.res, val
@@ -164,7 +164,7 @@ proc run*(lf: LinearFunction, args: openarray[Value]): Value =
         of vFunction:
           fn.functionValue.value.call(args, effectHandler)
         of vLinearFunction:
-          fn.linearFunctionValue.value.run(args.toOpenArray(0, args.len - 1))
+          fn.linearFunctionValue.value.call(args.toOpenArray(0, args.len - 1))
         else: raiseAssert("cannot call " & $fn)
       checkEffect val
       put instr.tupcall.res, val
@@ -185,7 +185,7 @@ proc run*(lf: LinearFunction, args: openarray[Value]): Value =
           of vFunction:
             fn.functionValue.value.call(args, effectHandler)
           of vLinearFunction:
-            fn.linearFunctionValue.value.run(args.toOpenArray(0, args.len - 1))
+            fn.linearFunctionValue.value.call(args.toOpenArray(0, args.len - 1))
           else: raiseAssert("cannot call " & $fn)
         checkEffect val
         put instr.tdisp.res, val
@@ -269,7 +269,7 @@ proc run*(lf: LinearFunction, args: openarray[Value]): Value =
       of vLinearFunction:
         let f = h.linearFunctionValue.value
         handler = proc (effect: Value): bool =
-          let val = f.run([effect])
+          let val = f.call([effect])
           if val.kind == vEffect and (effectHandler.isNil or not effectHandler(val)):
             return false
           val.toBool
@@ -278,8 +278,8 @@ proc run*(lf: LinearFunction, args: openarray[Value]): Value =
     of PopEffectHandler:
       read instr.poeh
       let handler = effectHandlers.pop()
-      if unhandledEffect and handler(result):
-        reset(result)
+      if unhandledEffect and handler(registers[effectPos]):
+        reset(registers[effectPos])
         unhandledEffect = false
     of InitTuple:
       read instr.coll
@@ -397,4 +397,14 @@ proc run*(lf: LinearFunction, args: openarray[Value]): Value =
       let a = get(instr.unary.arg).unboxStripType.float32Value
       put instr.unary.res, toValue(-a)
 
-  result = registers[lf.argPositions[args.len]]
+proc call*(lf: LinearFunction, args: openarray[Value]): Value =
+  var registers = initArray[Value](lf.registerCount)
+  
+  assert lf.argPositions.len == args.len + 1, $(lf.argPositions, args.len)
+  for i in 0 ..< args.len:
+    registers[lf.argPositions[i]] = args[i]
+  let resultPos = lf.argPositions[args.len]
+  
+  runOnStack(lf, registers, resultPos)
+
+  result = registers[resultPos]

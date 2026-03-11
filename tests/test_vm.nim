@@ -3,7 +3,7 @@ when (compiles do: import nimbleutils/bridge):
 else:
   import unittest
 
-import abyzou, abyzou/vm/[primitives, valueconstr, typebasics, typematch, compilation, arrays]
+import abyzou, abyzou/vm/[primitives, valueconstr, typebasics, typematch, compilation, arrays, functions]
 
 test "type relation":
   check {Int32Ty.match(Float32Ty).level, Float32Ty.match(Int32Ty).level} == {tmNone}
@@ -16,6 +16,8 @@ test "type relation":
   check a3.match(a1).level == tmUniversalTrue
   check {a1.match(a4).level, a4.match(a1).level, a3.match(a4).level, a4.match(a3).level} == {tmAlmostEqual}
   check a1 < a3
+
+template compile(s: string, libraries = @[Prelude]): Function = compileAsFunction(s, libraries)
 
 test "compile success":
   template working(a) =

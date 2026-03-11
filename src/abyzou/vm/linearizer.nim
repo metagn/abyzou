@@ -498,6 +498,9 @@ proc createLinearContext*(context: Context): LinearContext =
   for i in 0 ..< context.stackSlots.len:
     let reg = result.newRegister()
     result.variableRegisters[i] = reg
+    if context.stackSlots[i].kind == Local:
+      # enforce this so that other modules can easily access it:
+      doAssert reg.int == context.stackSlots[i].variable.stackIndex, $(i, reg.int, context.stackSlots[i].variable.stackIndex)
     if context.stackSlots[i].kind == Argument:
       result.argRegisters.add(reg)
     # this might lose performance but is needed for capture arming

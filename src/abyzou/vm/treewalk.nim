@@ -1,6 +1,6 @@
 import
   std/[sets, tables],
-  ./[primitives, arrays, valueconstr, checktype]
+  ./[primitives, arrays, valueconstr, checktype, typebasics]
 
 proc get*(stack: Stack, index: int): lent Value {.inline.} =
   stack.stack[index]
@@ -35,7 +35,7 @@ proc call*(fun: TreeWalkFunction, args: sink Array[Value], effectHandler: Effect
     newStack.set(i, args[i])
   result = runCheckEffect(fun.instruction, newStack, effectHandler)
 
-include ./bytecode
+import ./bytecode
 
 proc call*(fun: Value, args: sink Array[Value], effectHandler: EffectHandler = nil): Value {.inline.} =
   case fun.kind
@@ -44,7 +44,7 @@ proc call*(fun: Value, args: sink Array[Value], effectHandler: EffectHandler = n
   of vFunction:
     result = fun.functionValue.value.call(args, effectHandler)
   of vLinearFunction:
-    result = fun.linearFunctionValue.value.run(args.toOpenArray(0, args.len - 1))
+    result = fun.linearFunctionValue.value.call(args.toOpenArray(0, args.len - 1))
   else: raiseAssert("cannot call " & $fun)
 
 proc evaluate*(ins: Instruction, stack: Stack, effectHandler: EffectHandler = nil): Value =
@@ -132,7 +132,7 @@ proc evaluate*(ins: Instruction, stack: Stack, effectHandler: EffectHandler = ni
     of vLinearFunction:
       let f = h.linearFunctionValue.value
       handler = proc (effect: Value): bool =
-        let val = f.run([effect])
+        let val = f.call([effect])
         if val.kind == vEffect and (effectHandler.isNil or not effectHandler(val)):
           return false
         val.toBool
