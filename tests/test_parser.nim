@@ -290,10 +290,10 @@ else:
 
 test "parse files without crashing":
   for f in [
-    "concepts/arguments.by",
-    "concepts/badspec.by",
-    "concepts/tag.by",
-    "concepts/test.by"
+    "concepts/arguments.byz",
+    "concepts/badspec.byz",
+    "concepts/tag.byz",
+    "concepts/test.byz"
   ]:
     when defined(testsBenchmark): echo "file ", f
     bench("loading file"):
@@ -324,7 +324,7 @@ test "parse files without crashing":
 
 when defined(testsBenchmark):
   test "200x size file":
-    let f = "concepts/badspec.by"
+    let f = "concepts/badspec.byz"
     bench("loading file"):
       let s = repeat(when declared(read): read(f) else: readFile(f), 200)
     bench("tokenizing"):

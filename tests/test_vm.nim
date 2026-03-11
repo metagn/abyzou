@@ -268,7 +268,7 @@ module checks:
 test "examples":
   let libraries = @[Prelude, checks()]
   for f in [
-    "examples/binary_search.by"
+    "examples/binary_search.byz"
   ]:
     let s = when declared(read): read(f) else: readFile(f)
     checkpoint s

@@ -679,10 +679,10 @@ when isMainModule:
 
   when false:
     let tests = [
-      readFile("concepts/test.by"),
-      #readFile("concepts/tag.by"),
-      readFile("concepts/arguments.by"),
-      readFile("concepts/badspec.by")
+      readFile("concepts/test.byz"),
+      #readFile("concepts/tag.byz"),
+      readFile("concepts/arguments.byz"),
+      readFile("concepts/badspec.byz")
     ]
 
     for t in tests:
