@@ -35,6 +35,7 @@ proc getType*(x: Value): Type =
   of vExpression: result = ExpressionTy
   of vStatement: result = StatementTy
   of vContext: result = ContextTy
+  of vModule: result = ModuleTy
   of vArray:
     let val = x.tupleValue
     var elems = newSeq[Type](val.len)

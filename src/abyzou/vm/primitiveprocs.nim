@@ -20,6 +20,7 @@ template idObject[T: ref](t: type T) {.dirty.} =
 idObject(TypeBase)
 idObject(TypeParameter)
 idObject(Variable)
+idObject(Module)
 
 proc hash*(v: BoxedValueObj): Hash {.noSideEffect.}
 proc hash*(v: Value): Hash {.noSideEffect.}
@@ -101,6 +102,8 @@ proc `$`*(value: BoxedValue): string =
   if value.isNil: "<nil>"
   else: $value[]
 
+proc `$`*(module: Module): string
+
 proc `$`*(value: Value): string =
   case value.kind
   of vNone: "()"
@@ -130,6 +133,7 @@ proc `$`*(value: Value): string =
   of vExpression: $value.expressionValue[]
   of vStatement: $value.statementValue[]
   of vContext: $value.contextValue.value
+  of vModule: $value.moduleValue
 
 proc `$`*(p: TypeBase): string {.inline.} = p.name
 
@@ -176,7 +180,11 @@ proc `$`*(variable: Variable): string =
 proc `$`*(scope: Scope): string
 
 proc `$`*(module: Module): string =
-  result = "module\n"
+  result = "module"
+  if module.name.len != 0:
+    result.add ' '
+    result.add module.name
+  result.add '\n'
   for v in module.stackSlots:
     let prefix =
       case v.kind

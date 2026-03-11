@@ -44,7 +44,8 @@ type
     # could be pointers or serialized but for now this is more efficient:
     vExpression
     vStatement
-    vContext
+    vModule
+      # XXX (references) implement accessing modules and module variables
     vBoxed
       ## boxed version of unboxed values, used for type info
     vInt64, vUint64, vFloat64
@@ -59,6 +60,7 @@ type
     vFunction
       ## function
     vLinearFunction
+    vContext
     # bigints can be added
     # native types in general can be BoxedValue[pointer]
 
@@ -88,10 +90,10 @@ type
     of vEffect:
       effectValue*: Box[Value]
     of vReference:
-      # XXX figure out how to optimize this for mutable collections
+      # XXX (references) figure out how to optimize this for mutable collections
       referenceValue*: Reference[Value]
     of vArray:
-      # XXX (6) maybe match pointer field location with vList, vString
+      # XXX (byte layout, references) maybe match pointer field location with vList, vString
       arrayValue*: RefArray[Value]
     of vBoxed:
       boxedValue*: BoxedValue[Value]
@@ -104,10 +106,12 @@ type
     of vType:
       typeValue*: BoxedValue[Type]
     of vString:
-      # XXX (6) maybe match pointer field location with vArray, vList
+      # XXX (byte layout) use manta growable arrays
+      # XXX (byte layout, references) maybe match pointer field location with vArray, vList
       stringValue*: BoxedValue[string]
     of vList:
-      # XXX (6) maybe match pointer field location with vArray, vString
+      # XXX (byte layout) use manta growable arrays
+      # XXX (byte layout, references) maybe match pointer field location with vArray, vString
       listValue*: BoxedValue[seq[Value]]
     of vSet:
       setValue*: BoxedValue[HashSet[Value]]
@@ -125,6 +129,8 @@ type
       statementValue*: Statement
     of vContext:
       contextValue*: BoxedValue[Context]
+    of vModule:
+      moduleValue*: Module
   
   PointerTaggedValue* = distinct (
     when pointerTaggable:
@@ -140,7 +146,7 @@ type
     tyNoType,
     # concrete
     tyInstance,
-    tyTuple, # XXX (1) make into tyComposite, tuple, named tuple, array (i.e. int^20) all at once
+    tyTuple, # XXX (tuple type) make into tyComposite, tuple, named tuple, array (i.e. int^20) all at once
     # typeclass
     tyAny, tyAll, ## top and bottom types
     tyUnion, tyIntersection, tyNot,
@@ -191,13 +197,13 @@ type
     ntyString,
     ntySet,
     ntyTable,
-    ntyExpression, ntyStatement, ntyContext,
+    ntyExpression, ntyStatement, ntyContext, ntyModule,
     ntyType,
     # typeclass
     ntyTupleConstructor
 
   TypeBase* = ref object
-    # XXX (2) check arguments at generic fill time
+    # XXX (types) check arguments at generic fill time
     id*: TypeBaseId
     name*: string
     nativeType*: NativeType
@@ -212,8 +218,8 @@ type
     bound*: TypeBound
 
   Type* = object
-    # XXX (2) 90 bytes - change these tables out for something smaller
-    # XXX (2) figure out which kinds to merge with tyInstance (XXX (1) at least tyTuple)
+    # XXX (types) 90 bytes - change these tables out for something smaller
+    # XXX (types) figure out which kinds to merge with tyInstance (XXX (tuple type) at least tyTuple)
     properties*: Table[TypeBase, Type]
       # can be a multitable later on
     case kind*: TypeKind
@@ -224,10 +230,10 @@ type
     of tyTuple:
       elements*: seq[Type]
       varargs*: Box[Type] # for now only trailing
-        # XXX (1) either move to property, or allow non-trailing
-        # XXX (1) definite length varargs? i.e. array[3, int]
+        # XXX (tuple type) either move to property, or allow non-trailing
+        # XXX (tuple type) definite length varargs? i.e. array[3, int]
       elementNames*: Table[string, int]
-      # XXX (1) also Defaults purely for initialization/conversion?
+      # XXX (tuple type) also Defaults purely for initialization/conversion?
       # meaning only considered in function type relation
     of tyUnion, tyIntersection:
       operands*: seq[Type]
@@ -259,7 +265,7 @@ type
   LinearProgram* = object
     registerCount*: int
     argPositions*: Array[int] ## last is result
-    constants*: Array[Value] # XXX (5) serialize values
+    constants*: Array[Value] # XXX (serialization) serialize values
     jumpLocations*: Array[int]
     instructions*: seq[byte]
 
@@ -356,7 +362,7 @@ type
 
   StatementObj* = object
     ## typed/compiled expression
-    # XXX (7) differentiate between validated and unvalidated,
+    # XXX (macros) differentiate between validated and unvalidated,
     # maybe allow things like skFromExpression for metas
     knownType*: Type
     case kind*: StatementKind
@@ -367,7 +373,7 @@ type
       callee*: Statement
       arguments*: seq[Statement]
     of skDispatch:
-      # XXX (8) generalize dispatch result
+      # XXX (dispatch) generalize dispatch result
       dispatchees*: seq[(seq[Type], Statement)]
       dispatchArguments*: seq[Statement]
     of skSequence:
@@ -420,7 +426,7 @@ type
     stackIndex*: int
     scope* {.cursor.}: Scope
     genericParams*: seq[TypeParameter]
-      # XXX (2) maybe make this a tuple type too with signature for named and default generic params
+      # XXX (types) maybe make this a tuple type too with signature for named and default generic params
     lazyExpression*: Expression
     evaluated*: bool
 
@@ -432,6 +438,8 @@ type
   Module* = ref object
     ## current module or function
     ## should not contain any "temporary" compilation constructs but it works out that nothing temporary really needs to stay saved
+    id*: ModuleId
+    name*: string
     origin*: Scope
       ## context closure is defined in
     captures*: Table[Variable, int]

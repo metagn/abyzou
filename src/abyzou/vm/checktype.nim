@@ -38,7 +38,7 @@ proc checkType*(value: Value, t: Type): bool =
     of ntyUint64: value.kind == vUint64
     of ntyFloat64: value.kind == vFloat64
     of ntyFunction:
-      # XXX (3) this is not necessarily correct, depends on boxed value type
+      # XXX (type matching) this is not necessarily correct, depends on boxed value type
       value.kind in {vFunction, vNativeFunction, vLinearFunction}
     of ntyTuple:
       value.kind == vArray and (t.kind == tyBase or value.tupleValue.eachAre(t.baseArguments))

@@ -49,6 +49,7 @@ proc toValue*(x: LinearProgram): Value = withkindbox(linearFunction, x)
 proc toValue*(x: Expression): Value = withkind(expression, x)
 proc toValue*(x: Statement): Value = withkind(statement, x)
 proc toValue*(x: Context): Value = withkindbox(context, x)
+proc toValue*(x: Module): Value = withkind(module, x)
 
 proc unboxStripType*(x: Value): Value {.inline.} =
   if x.kind == vBoxed: result = x.boxedValue.value
@@ -68,6 +69,7 @@ proc setTypeIfBoxed*(x: Value, t: Type) {.inline.} =
   of vTable: x.tableValue.type = t
   of vFunction: x.functionValue.type = t
   of vLinearFunction: x.linearFunctionValue.type = t
+  of vContext: x.contextValue.type = t
 
 proc getTypeIfBoxed*(x: Value): Type {.inline.} =
   case x.kind
@@ -83,6 +85,7 @@ proc getTypeIfBoxed*(x: Value): Type {.inline.} =
   of vTable: result = x.tableValue.type
   of vFunction: result = x.functionValue.type
   of vLinearFunction: result = x.linearFunctionValue.type
+  of vContext: result = x.contextValue.type
 
 proc makeTyped*(x: var Value, t: Type) =
   if x.kind in unboxedValueKinds:
@@ -92,7 +95,7 @@ proc makeTyped*(x: var Value, t: Type) =
     setTypeIfBoxed(x, t)
 
 when false:
-  # XXX (5) this is probably important
+  # XXX (serialization) this is probably important
   proc copy*(value: Value): Value =
     case value.kind
     of vNone, vInt64, vBool, vUint64, vFloat64,

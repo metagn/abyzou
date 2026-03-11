@@ -12,7 +12,7 @@ proc newVariable*(name: string, knownType: Type = NoType): Variable =
   Variable(id: newVariableId(), name: name, nameHash: name.hash, knownType: knownType)
 
 proc newModule*(parent: Scope = nil, imports: seq[Scope] = @[]): Module =
-  result = Module(origin: parent)
+  result = Module(id: newModuleId(), origin: parent)
   result.top = Scope(module: result, imports: imports)
 
 proc childModule*(scope: Scope): Module =
@@ -346,7 +346,7 @@ proc compileMetaCall*(scope: Scope, name: string, ex: Expression, bound: TypeBou
   result = nil
   var argumentTypes = newSeq[Type](ex.arguments.len)
   for t in argumentTypes.mitems: t = AnyTy
-  # XXX (7) validate output statement
+  # XXX (macros) validate output statement
   var realArgumentTypes = newSeq[Type](ex.arguments.len + 1)
   realArgumentTypes[0] = ContextTy
   for i in 1 ..< realArgumentTypes.len:
@@ -416,7 +416,7 @@ proc compileMetaCall*(scope: Scope, name: string, ex: Expression, bound: TypeBou
         arguments: arguments).toInstruction
       result = scope.module.evaluateStatic(call).statementValue
     elif subMetas.len != 0:
-      # XXX (8) sub meta dispatch, needs better output and described semantics
+      # XXX (dispatch) sub meta dispatch, needs better output and described semantics
       var argumentValues = newSeq[Variable](ex.arguments.len)
       var dispatches: seq[tuple[condition, body: Statement]]
       for d in subMetas:
@@ -504,7 +504,7 @@ proc compileRuntimeCall*(scope: Scope, ex: Expression, bound: TypeBound,
   functionType = funcType(if bound.variance == Contravariant: AnyTy else: bound.boundType, argumentTypes)
   # lowest supertype function:
   try:
-    # XXX (1) named arguments
+    # XXX (tuple types) named arguments
     var withConstructor = functionType
     withConstructor.baseArguments[0] = TupleConstructorTy[withConstructor.baseArguments[0]]
     let callee = map(ex.address, -withConstructor)
@@ -538,7 +538,7 @@ proc compileRuntimeCall*(scope: Scope, ex: Expression, bound: TypeBound,
             let m = match(-argumentTypes[j], pt)
             if m.matches:
               # optimize checking types we know match
-              # XXX (3) do this recursively using deep matches for some types
+              # XXX (type matching) do this recursively using deep matches for some types
               argTypes[j] = AnyTy
             else:
               argTypes[j] = pt
@@ -694,7 +694,7 @@ proc compile*(scope: Scope, ex: Expression, bound: TypeBound): Statement =
           arguments: @[ex.left, ex.right]))
   of CallKinds: result = compileCall(scope, ex, bound)
   of Subscript:
-    # XXX (2) specialize for generics
+    # XXX (types) specialize for generics
     result = forward(Expression(kind: PathCall,
       address: newSymbolExpression(short".[]"),
       arguments: @[ex.address] & ex.arguments))
