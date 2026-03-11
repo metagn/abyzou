@@ -33,19 +33,19 @@ assert
   [3, 5, 1, 4, 1].binary_search(1) == -1
   3 == do binary_search [1, 2, 3, 4, 5, 6], 4
 
-space functional
+functional = module
   permutation(n: Int, r: Int) = product n - r + 1 .. n # infixes support unary command syntax on right hand side
   factorial(n: Int) = permutation(n, n)
   combination(n: Int, r: Int) = permutation(n, r) / factorial(r)
 
-space imperative
+imperative = module
   factorial(n: Int) =
     x = i = 1
     while i < n, x *= i += 1
     x
 
   permutation(n: Int, r: Int) =
-    for result x = 1, each i = succ n - r .. n
+    for result x = 1, each i = succ(n - r) .. n
       x |>= *i # this operator is made up but is possible
 
   combination(n: Int, r: Int) = do for result x = 1, each i in 0..<r do while i < r do x = x * (n - i) / (r - i)

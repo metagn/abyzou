@@ -83,8 +83,8 @@ proc newTokenizer*(loader: proc(): string, options = defaultOptions()): Tokenize
   result = Tokenizer(vein: initVein(loader), options: options)
   result.resetTokenizer()
 
-proc extendBufferOne(tz: var Tokenizer) =
-  let remove = tz.vein.extendBufferOne()
+proc loadBufferOne(tz: var Tokenizer) =
+  let remove = tz.vein.loadBufferOne()
   tz.pos -= remove
   tz.previousPos -= remove
 
@@ -92,7 +92,7 @@ proc peekCharOrZero(tz: var Tokenizer): char =
   if tz.pos < tz.vein.buffer.len:
     result = tz.vein.buffer[tz.pos]
   else:
-    tz.extendBufferOne()
+    tz.loadBufferOne()
     if tz.pos < tz.vein.buffer.len:
       result = tz.vein.buffer[tz.pos]
     else:
@@ -116,7 +116,7 @@ proc nextRune*(tz: var Tokenizer): bool =
     if tz.pos < tz.vein.buffer.len:
       tz.vein.buffer[tz.pos]
     else:
-      tz.extendBufferOne()
+      tz.loadBufferOne()
       if tz.pos < tz.vein.buffer.len:
         tz.vein.buffer[tz.pos]
       else:
@@ -131,7 +131,7 @@ proc nextRune*(tz: var Tokenizer): bool =
       tz.cl = 0
   else:
     when useUnicode:
-      let remove = tz.vein.extendBufferRuneStart(c)
+      let remove = tz.vein.loadBufferRuneStart(c)
       tz.pos -= remove
       tz.previousPos -= remove
       fastRuneAt(tz.vein.buffer, tz.pos, tz.currentRune, true)
