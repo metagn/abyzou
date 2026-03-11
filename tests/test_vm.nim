@@ -3,15 +3,15 @@ when (compiles do: import nimbleutils/bridge):
 else:
   import unittest
 
-import abyzou, abyzou/vm/[primitives, valueconstr, typebasics, typematch, compilation, arrays]
+import abyzou, abyzou/vm/[primitives, valueconstr, typebasics, typematch, compilation, arrays, programs]
 
 test "type relation":
   check {Int32Ty.match(Float32Ty).level, Float32Ty.match(Int32Ty).level} == {tmNone}
-  let a1 = Type(kind: tyTuple, elements: @[ScopeTy], varargs: box ExpressionTy)
-  let a2 = Type(kind: tyTuple, elements: @[ScopeTy, ExpressionTy, ExpressionTy])
+  let a1 = Type(kind: tyTuple, elements: @[ContextTy], varargs: box ExpressionTy)
+  let a2 = Type(kind: tyTuple, elements: @[ContextTy, ExpressionTy, ExpressionTy])
   check {a1.match(a2).level, a2.match(a1).level} == {tmAlmostEqual}
-  let a3 = Type(kind: tyTuple, elements: @[ScopeTy], varargs: box AnyTy)
-  let a4 = Type(kind: tyTuple, elements: @[ScopeTy])
+  let a3 = Type(kind: tyTuple, elements: @[ContextTy], varargs: box AnyTy)
+  let a4 = Type(kind: tyTuple, elements: @[ContextTy])
   check a1.match(a3).level == tmUniversalFalse
   check a3.match(a1).level == tmUniversalTrue
   check {a1.match(a4).level, a4.match(a1).level, a3.match(a4).level, a4.match(a3).level} == {tmAlmostEqual}
@@ -179,8 +179,8 @@ c = foo()
       let ex = parse(inp)
       echo ex
       when false:
-        var context = newContext(imports = @[Prelude])
-        let body = compile(context.top, ex, +AnyTy)
+        var module = newModule(imports = @[Prelude])
+        let body = compile(module.top, ex, +AnyTy)
         echo body
       if getCurrentException() of ref NoOverloadFoundError:
         echo (ref NoOverloadFoundError)(getCurrentException()).scope.variables
@@ -217,9 +217,9 @@ module withGeneric:
   result.define(f)
   let f2 = define(result, "foo", funcType(ListTy[Int32Ty], [Int32Ty]))
   result.define(f2)
-  result.context.set f, toValue proc (args: openarray[Value]): Value =
+  result.module.set f, toValue proc (args: openarray[Value]): Value =
     result = toValue(@[args[0]])
-  result.context.set f2, toValue proc (args: openarray[Value]): Value =
+  result.module.set f2, toValue proc (args: openarray[Value]): Value =
     result = toValue(@[toValue(-args[0].int32Value)])
 
 test "generic":
@@ -231,20 +231,20 @@ test "generic":
 
 module withGenericMeta:
   let T = Type(kind: tyParameter, parameter: newTypeParameter("T"))
-  let f = define(result, "foo", funcType(StatementTy, [ScopeTy, ExpressionTy]).withProperties(
+  let f = define(result, "foo", funcType(StatementTy, [ContextTy, ExpressionTy]).withProperties(
     property(Meta, funcType(ListTy[T], [T]))
   ))
   f.genericParams = @[T.parameter]
   result.define(f)
-  let f2 = define(result, "foo", funcType(StatementTy, [ScopeTy, StatementTy]).withProperties(
+  let f2 = define(result, "foo", funcType(StatementTy, [ContextTy, StatementTy]).withProperties(
     property(Meta, funcType(ListTy[Int32Ty], [Int32Ty]))
   ))
   result.define(f2)
-  result.context.set f, toValue proc (args: openarray[Value]): Value =
-    let scope = args[0].scopeValue
-    result = toValue compile(scope, Expression(kind: Array,
+  result.module.set f, toValue proc (args: openarray[Value]): Value =
+    let context = args[0].contextValue.value
+    result = toValue compile(context.scope, Expression(kind: Array,
       elements: @[args[1].expressionValue]), +AnyTy)
-  result.context.set f2, toValue proc (args: openarray[Value]): Value =
+  result.module.set f2, toValue proc (args: openarray[Value]): Value =
     result = toValue Statement(kind: skList,
       knownType: ListTy[Int32Ty],
       elements: @[Statement(kind: skUnaryInstruction,

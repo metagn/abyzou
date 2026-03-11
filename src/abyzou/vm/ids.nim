@@ -17,5 +17,6 @@ template id(kind) {.dirty.} =
 id(TypeBase)
 id(TypeParameter)
 id(Variable)
+id(Module)
 
 # XXX maybe intern identifiers or strings?

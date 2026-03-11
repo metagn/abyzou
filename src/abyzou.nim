@@ -6,7 +6,7 @@ proc parse*(str: string): Expression =
   result = parser.parse(tokenizer)
 
 when not defined(js) and not defined(nimscript):
-  import abyzou/vm/[compilation, primitives], abyzou/library/prelude
+  import abyzou/vm/[compilation, primitives, programs], abyzou/library/prelude
 
   let Prelude* = prelude()
 

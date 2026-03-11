@@ -8,17 +8,17 @@ import common
 
 module syntax:
   templ "block", 1:
-    let sc = scope.childScope()
+    let sc = context.scope.childScope()
     result = toValue sc.compile(args[0], +AnyTy)
   templ "static", 1:
-    let st = scope.compile(args[0], +AnyTy)
-    result = toValue constant(scope.context.evaluateStatic(st.toInstruction), st.knownType)
+    let st = context.scope.compile(args[0], +AnyTy)
+    result = toValue constant(context.scope.module.evaluateStatic(st.toInstruction), st.knownType)
   
-  # XXX (2) generic assignments or functions
+  # XXX (types) generic assignments or functions
   proc makeFn(scope: Scope, arguments: seq[Expression], body: Expression,
     name: string, returnBound: TypeBound, returnBoundSet: bool): Statement =
-    let context = scope.childContext()
-    let bodyScope = context.top
+    let module = scope.childModule()
+    let bodyScope = module.top
     var fnTypeArguments = Type(kind: tyTuple, elements: newSeq[Type](arguments.len))
     for i in 0 ..< arguments.len:
       var arg = arguments[i]
@@ -41,24 +41,25 @@ module syntax:
       v.knownType.baseArguments[1] = body.knownType
     var fun: Value
     if useBytecode:
-      let lc = linear(bodyScope.context, body)
+      let lc = linear(bodyScope.module, body)
       fun = toValue(lc.toFunction())
     else:
-      fun = toValue(TreeWalkFunction(
-        stack: bodyScope.context.makeStack(),
+      fun = toValue(TreeWalkProgram(
+        stack: bodyScope.module.makeStack(),
         instruction: body.toInstruction))
     setTypeIfBoxed(fun, fnType)
     if not v.isNil:
-      scope.context.set(v, fun)
+      scope.module.set(v, fun)
     var captures: seq[tuple[index, valueIndex: int]]
-    for c, ci in context.captures:
-      captures.add((ci, context.origin.context.capture(c)))
+    for c, ci in module.captures:
+      captures.add((ci, module.origin.module.capture(c)))
     result = Statement(kind: skArmStack,
       knownType: fnType,
       armStackFunction: constant(fun, fnType),
       armStackCaptures: captures)
 
   templ "=>", 2:
+    let scope = context.scope
     var lhs = args[0]
     var body = args[1]
     let (bound, typeSet) =
@@ -78,6 +79,7 @@ module syntax:
     result = toValue makeFn(scope, arguments, body, name, bound, typeSet)
   templ ":=", 2:
     # generics?
+    let scope = context.scope
     var lhs = args[0]
     let rhs = args[1]
     let (bound, typeSet) =
@@ -92,11 +94,12 @@ module syntax:
       let name = $lhs
       let value = compile(scope, rhs, bound)
       let v = scope.define(name, if typeSet: bound.boundType else: value.knownType)
-      result = toValue variableSet(scope.context, v.shallowReference, value, source = lhs)
+      result = toValue variableSet(scope.module, v.shallowReference, value, source = lhs)
     of CallKinds:
       result = toValue makeFn(scope, lhs.arguments, rhs, $lhs.address, bound, typeSet)
     else: assert false, $lhs
   templ "=", 2:
+    let scope = context.scope
     var lhs = args[0]
     let rhs = args[1]
     let (bound, typeSet) =
@@ -112,11 +115,11 @@ module syntax:
       if (let a = scope.overloads(name, bound); a.len != 0):
         let v = a[0]
         let value = compile(scope, rhs, +v.type)
-        result = toValue variableSet(scope.context, v, value, source = lhs)
+        result = toValue variableSet(scope.module, v, value, source = lhs)
       else:
         let value = compile(scope, rhs, bound)
         let v = scope.define(name, value.knownType)
-        result = toValue variableSet(scope.context, v.shallowReference, value, source = lhs)
+        result = toValue variableSet(scope.module, v.shallowReference, value, source = lhs)
     of CallKinds:
       result = toValue makeFn(scope, lhs.arguments, rhs, $lhs.address, bound, typeSet)
     of Subscript:

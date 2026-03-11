@@ -62,7 +62,8 @@ nativeAtomicType Float64
 nativeAtomicType String
 nativeAtomicType Expression
 nativeAtomicType Statement
-nativeAtomicType Scope
+nativeAtomicType Context
+nativeAtomicType Module
 nativeType Reference, [+AnyTy]
 nativeType List, [+AnyTy]
 nativeType Set, [+AnyTy]
@@ -191,7 +192,7 @@ proc fillParameters*(pattern: var Type, table: ParameterInstantiation) =
   of tyNoType, tyAny, tyAll, tyBase:
     discard
   of tyInstance:
-    # XXX (2) check argument bounds
+    # XXX (types) check argument bounds
     if unlikely(not pattern.base.paramFiller.isNil):
       pattern.base.paramFiller(pattern, table)
     else:

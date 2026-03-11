@@ -20,6 +20,7 @@ template idObject[T: ref](t: type T) {.dirty.} =
 idObject(TypeBase)
 idObject(TypeParameter)
 idObject(Variable)
+idObject(Module)
 
 proc hash*(v: BoxedValueObj): Hash {.noSideEffect.}
 proc hash*(v: Value): Hash {.noSideEffect.}
@@ -101,6 +102,8 @@ proc `$`*(value: BoxedValue): string =
   if value.isNil: "<nil>"
   else: $value[]
 
+proc `$`*(module: Module): string
+
 proc `$`*(value: Value): string =
   case value.kind
   of vNone: "()"
@@ -129,7 +132,8 @@ proc `$`*(value: Value): string =
   of vTable: $value.tableValue.value
   of vExpression: $value.expressionValue[]
   of vStatement: $value.statementValue[]
-  of vScope: $value.scopeValue[]
+  of vContext: $value.contextValue.value
+  of vModule: $value.moduleValue
 
 proc `$`*(p: TypeBase): string {.inline.} = p.name
 
@@ -175,9 +179,13 @@ proc `$`*(variable: Variable): string =
 
 proc `$`*(scope: Scope): string
 
-proc `$`*(context: Context): string =
-  result = "context\n"
-  for v in context.stackSlots:
+proc `$`*(module: Module): string =
+  result = "module"
+  if module.name.len != 0:
+    result.add ' '
+    result.add module.name
+  result.add '\n'
+  for v in module.stackSlots:
     let prefix =
       case v.kind
       of Capture:
@@ -190,7 +198,7 @@ proc `$`*(context: Context): string =
         "  "
     result.add(prefix & $v.variable & "\n")
   result.add("parent\n")
-  for line in splitLines($context.origin):
+  for line in splitLines($module.origin):
     result.add("  " & line & "\n")
 
 proc `$`*(scope: Scope): string =
