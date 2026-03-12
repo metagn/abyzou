@@ -209,19 +209,7 @@ proc match*(matcher, t: Type, inst: var ParameterInstantiation): TypeMatch =
           if m.level < res.level: res.level = m.level
           if res.level <= tmNone: return res
       res
-  #of noArgNativeTypes:
-  #  let tkind =
-  #    case t.kind
-  #    of tyInstance: t.instanceBase.nativeType
-  #    of tyBase: t.typeBase.nativeType
-  #    else: t.kind
-  #  if matcher.kind != tkind:
-  #    return if {matcher.kind, tkind} <= concreteTypeKinds:
-  #      atomicMatch(tmNone)
-  #    else:
-  #      atomicMatch(tmUnknown)
-  #  atomicMatch(tmAlmostEqual)
-  of nativeTypes * concreteTypeKinds:# - noArgNativeTypes - {tyTupleConstructor}:
+  of nativeTypes * concreteTypeKinds:
     # XXX native type normalization here
     let tnt =
       case t.kind
