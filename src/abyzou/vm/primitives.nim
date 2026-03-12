@@ -65,11 +65,12 @@ type
     # bigints can be added
     # native types in general can be BoxedValue[pointer]
 
-  NativeType* = enum
+  TypeKind* = enum
+    # maybe add unknown type for values with unknown type at runtime
     tyNoType = "<none>",
     # weird concrete
     tyInstance = "<instance>",
-    tyTuple = "Tuple",
+    tyTuple = "Tuple", # XXX (tuple type) make into tyComposite, tuple, named tuple, array (i.e. int^20) all at once
     # concrete
     tyNoneValue = "NoneValue",
     tyInt32 = "Int32", tyUint32 = "Uint32", tyFloat32 = "Float32", tyBool = "Bool",
@@ -83,7 +84,7 @@ type
     tyExpression = "Expression", tyStatement = "Statement", tyContext = "Context", tyModule = "Module",
     tyType = "Type",
     # typeclass
-    tyAny = "Any", tyAll = "All",
+    tyAny = "Any", tyAll = "All", ## top and bottom types
     tyUnion = "Union", tyIntersection = "Intersection", tyNot = "Not"
     tyBase = "<base>",
     tyNativeBase = "<native base>",
@@ -93,15 +94,20 @@ type
     tyParameter = "Parameter",
     # value container
     tyValue = "Value"
+      # XXX (types) maybe only makes sense in type arg context and could go in separate TypeArg type?
 
 const unboxedValueKinds* = {vNone..pred(vBoxed)}
 const
-  basicNativeTypes* = {tyNoneValue..tyType, tyTupleConstructor}
-  nullaryBasicNativeTypes* = {tyNoneValue..tyFloat64, tyString, tyExpression, tyStatement, tyContext, tyModule}
-  argBasicNativeTypes* = basicNativeTypes - nullaryBasicNativeTypes
-  allTypeKinds* = {low(NativeType)..high(NativeType)}
+  allTypeKinds* = {low(TypeKind)..high(TypeKind)}
   concreteTypeKinds* = {tyTuple, #[tyInstance,]# tyNoneValue..tyType}
   typeclassTypeKinds* = {tyAny..tySomeValue}
+  nativeTypes* = {tyNoneValue..tyType, tyTupleConstructor}
+    # XXX (types) to consider later: tuple, any all, union intersection not, somevalue
+    # typeclasses look a little annoying with normalization
+  noArgNativeTypes* = {tyNoneValue..tyFloat64, tyString, tyExpression, tyStatement, tyContext, tyModule}
+  argNativeTypes* = nativeTypes - noArgNativeTypes
+
+type NativeType* = TypeKind # since it can't be a range
 
 type
   BoxedValueObj*[T] = object
@@ -153,10 +159,13 @@ type
     of vTable:
       tableValue*: BoxedValue[Table[Value, Value]]
     of vFunction:
+      # XXX merge into Function object
       functionValue*: BoxedValue[TreeWalkProgram]
     of vLinearFunction:
+      # XXX merge into Function object
       linearFunctionValue*: BoxedValue[LinearProgram]
     of vNativeFunction:
+      # XXX merge into Function object
       nativeFunctionValue*: proc (args: openarray[Value]): Value {.nimcall.}
     of vExpression:
       expressionValue*: Expression
@@ -176,22 +185,6 @@ type
   
   Value* = ValueObj
 
-  #TypeKind* = enum
-  #  # maybe add unknown type for values with unknown type at runtime
-  #  tyNoType,
-  #  # concrete
-  #  tyInstance,
-  #  tyTuple, # XXX (tuple type) make into tyComposite, tuple, named tuple, array (i.e. int^20) all at once
-  #  # typeclass
-  #  tyAny, tyAll, ## top and bottom types
-  #  tyUnion, tyIntersection, tyNot,
-  #  tyBase,
-  #  tySomeValue,
-  #  # generic parameter
-  #  tyParameter,
-  #  # value container
-  #  tyValue
-    
   MatchLevel* = enum
     # in order of strength
     tmUnknown, tmNone,
@@ -238,11 +231,10 @@ type
 
   Type* = object
     # XXX (types) 90 bytes - change these tables out for something smaller
-    # XXX (types) figure out which kinds to merge with tyInstance (XXX (tuple type) at least tyTuple)
     properties*: Table[TypeBase, Type]
-      # XXX redo these
+      # XXX (types) redo these
       # can be a multitable later on
-    case kind*: NativeType
+    case kind*: TypeKind
     of tyNoType: discard
     of tyInstance:
       instanceBase*: TypeBase
@@ -255,8 +247,8 @@ type
       elementNames*: Table[string, int]
       # XXX (tuple type) also Defaults purely for initialization/conversion?
       # meaning only considered in function type relation
-    of nullaryBasicNativeTypes: discard
-    of argBasicNativeTypes:
+    of noArgNativeTypes: discard
+    of argNativeTypes:
       nativeArgs*: seq[Type]
     of tyBase:
       typeBase*: TypeBase

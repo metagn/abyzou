@@ -191,8 +191,8 @@ proc match*(matcher, t: Type, inst: var ParameterInstantiation): TypeMatch =
         else:
           atomicMatch(tmUnknown)
       if t.kind == tyInstance and matcher.instanceBase != t.instanceBase: return atomicMatch(tmUnknown)
-      let margBounds #[{.cursor.}]# = matcher.instanceBase.arguments
-      let targs #[{.cursor.}]# =
+      let margBounds {.cursor.} = matcher.instanceBase.arguments
+      let targs {.cursor.} =
         case t.kind
         of tyInstance: t.instanceArgs
         #of tyBase, tyNativeBase: @[]
@@ -209,7 +209,7 @@ proc match*(matcher, t: Type, inst: var ParameterInstantiation): TypeMatch =
           if m.level < res.level: res.level = m.level
           if res.level <= tmNone: return res
       res
-  #of nullaryBasicNativeTypes:
+  #of noArgNativeTypes:
   #  let tkind =
   #    case t.kind
   #    of tyInstance: t.instanceBase.nativeType
@@ -221,7 +221,7 @@ proc match*(matcher, t: Type, inst: var ParameterInstantiation): TypeMatch =
   #    else:
   #      atomicMatch(tmUnknown)
   #  atomicMatch(tmAlmostEqual)
-  of basicNativeTypes * concreteTypeKinds:# - nullaryBasicNativeTypes - {tyTupleConstructor}:
+  of nativeTypes * concreteTypeKinds:# - noArgNativeTypes - {tyTupleConstructor}:
     # XXX native type normalization here
     let tnt =
       case t.kind
@@ -234,8 +234,8 @@ proc match*(matcher, t: Type, inst: var ParameterInstantiation): TypeMatch =
         atomicMatch(tmNone)
       else:
         atomicMatch(tmUnknown)
-    let margBounds #[{.cursor.}]# = nativeTypeArgs[matcher.kind]
-    let targs #[{.cursor.}]# =
+    let margBounds {.cursor.} = nativeTypeArgs[matcher.kind]
+    let targs {.cursor.} =
       case t.kind
       of tyInstance: t.instanceArgs
       #of tyBase, tyNativeBase: @[]
@@ -315,7 +315,7 @@ proc match*(matcher, t: Type, inst: var ParameterInstantiation): TypeMatch =
       boolMatch mnt == t.instanceBase.nativeType
     elif t.kind == mnt: atomicMatch(tmTrue)
     else: atomicMatch(tmNone)
-    # XXX use unknown?
+    # XXX (type matching) use unknown?
   of tyBase:
     # XXX native type normalization here
     let mnt = matcher.typeBase.nativeType
@@ -340,14 +340,14 @@ proc match*(matcher, t: Type, inst: var ParameterInstantiation): TypeMatch =
       of tyInstance:
         boolMatch matcher.typeBase == t.instanceBase
       else: atomicMatch(tmNone)
-    # XXX use unknown?
+    # XXX (type matching) use unknown?
   of tyTupleConstructor:
     # XXX native type normalization here???
     case t.kind
     of tyInstance:
       if t.instanceBase.nativeType == tyTupleConstructor:
         match(matcher.nativeArgs[0], t.instanceArgs[0])
-      # XXX no tuple support here
+      # XXX (type matching, tuple types) no tuple support here
       else: atomicMatch(tmUnknown)
     of tyTuple:
       var mr = matcher.nativeArgs[0]

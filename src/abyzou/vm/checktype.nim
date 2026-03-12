@@ -28,7 +28,7 @@ proc checkType*(value: Value, t: Type): bool =
   var isBase = false
   var tnt = t.kind
   # XXX native type normalization here:
-  var nativeArgs #[{.cursor.}]#: seq[Type]
+  var nativeArgs {.cursor.}: seq[Type]
   case t.kind
   of tyInstance:
     if t.instanceBase.nativeType != tyNoType:
@@ -41,7 +41,7 @@ proc checkType*(value: Value, t: Type): bool =
   of tyNativeBase:
     isBase = true
     tnt = t.nativeBase
-  of argBasicNativeTypes:
+  of argNativeTypes:
     nativeArgs = t.nativeArgs
   of tyTuple:
     nativeArgs = t.elements

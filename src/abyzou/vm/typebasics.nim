@@ -63,8 +63,7 @@ proc baseType*(base: TypeBase): Type {.inline.} =
 let nativeTypeArgs*: array[NativeType, seq[TypeBound]] = [
   tyNoType: @[],
   # weird concrete
-  tyInstance: @[], # invalid?
-  tyTuple: @[], # invalid?
+  tyInstance: @[], tyTuple: @[], # - not native
   # concrete
   tyNoneValue: @[],
   tyInt32: @[], tyUint32: @[], tyFloat32: @[], tyBool: @[],
@@ -78,16 +77,15 @@ let nativeTypeArgs*: array[NativeType, seq[TypeBound]] = [
   tyExpression: @[], tyStatement: @[], tyContext: @[], tyModule: @[],
   tyType: @[+AnyTy],
   # typeclass
-  tyAny: @[], tyAll: @[],
-  tyUnion: @[], tyIntersection: @[], tyNot: @[], # invalid?
-  tyBase: @[], # invalid?
-  tyNativeBase: @[], # invalid?
+  tyAny: @[], tyAll: @[], # - not native
+  tyUnion: @[], tyIntersection: @[], tyNot: @[], # - not native
+  tyBase: @[], tyNativeBase: @[], # - not native
   tyTupleConstructor: @[+baseType(TupleTy)],
-  tySomeValue: @[+AnyTy],
+  tySomeValue: @[+AnyTy], # - not native
   # generic parameter
-  tyParameter: @[], # invalid?
+  tyParameter: @[], # - not native
   # value container
-  tyValue: @[] # invalid?
+  tyValue: @[] # - not native
 ]
 
 nativeAtomicType NoneValue
@@ -115,9 +113,9 @@ nativeType TupleConstructor, [+baseType(TupleTy)]
 proc instance*(tag: TypeBase, args: varargs[Type]): Type {.inline.} =
   let tnt = tag.nativeType
   case tnt
-  of nullaryBasicNativeTypes:
+  of noArgNativeTypes:
     Type(kind: tnt)
-  of argBasicNativeTypes:
+  of argNativeTypes:
     Type(kind: tnt, nativeArgs: @args)
   else:
     Type(kind: tyInstance, instanceBase: tag, instanceArgs: @args)
@@ -168,7 +166,7 @@ proc unwrapTypeType*(t: Type): Type {.inline.} =
   if t.kind == tyType:#t.kind == tyInstance and t.base.nativeType == tyType:
     result = t.nativeArgs[0]
 
-const definiteTypeLengths*: array[NativeType, int] = [
+const definiteTypeLengths*: array[TypeKind, int] = [
   tyNoType: 0,
   # weird concrete
   tyInstance: -1,
@@ -216,7 +214,7 @@ proc hasNth*(t: Type, i: int): bool {.inline.} =
 
 proc nth*(t: Type, i: int): Type =
   case t.kind
-  of tyNoType, tyAny, tyAll, nullaryBasicNativeTypes:
+  of tyNoType, tyAny, tyAll, noArgNativeTypes:
     discard # inapplicable
   of tyBase, tyNativeBase:
     discard # inapplicable
@@ -227,7 +225,7 @@ proc nth*(t: Type, i: int): Type =
       result = t.elements[i]
     else:
       result = t.varargs.unbox
-  of argBasicNativeTypes:
+  of argNativeTypes:
     result = t.nativeArgs[i]
   of tyUnion, tyIntersection:
     # this is actually not supposed to happen
@@ -254,7 +252,7 @@ proc fillParameters*(pattern: var Type, table: ParameterInstantiation) =
   case pattern.kind
   of tyParameter:
     pattern = table.table[pattern.parameter]
-  of tyNoType, tyAny, tyAll, tyBase, tyNativeBase, nullaryBasicNativeTypes:
+  of tyNoType, tyAny, tyAll, tyBase, tyNativeBase, noArgNativeTypes:
     discard
   of tyInstance:
     # XXX (types) check argument bounds
@@ -267,7 +265,7 @@ proc fillParameters*(pattern: var Type, table: ParameterInstantiation) =
     for e in pattern.elements.mitems:
       fill(e)
     fill(pattern.varargs)
-  of argBasicNativeTypes:
+  of argNativeTypes:
     for t in pattern.nativeArgs.mitems:
       fill(t)
   of tyUnion, tyIntersection:

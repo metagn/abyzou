@@ -159,8 +159,8 @@ proc `$`*(t: Type): string =
   of tySomeValue: "SomeValue(" & $t.someValueType & ")"
   of tyParameter: "Parameter(" & $t.parameter.name & ")"
   of tyValue: "Value(" & $t.value & ": " & $t.valueType & ")"
-  of nullaryBasicNativeTypes: $t.kind
-  of argBasicNativeTypes: $t.kind & "(" & $t.nativeArgs & ")"
+  of noArgNativeTypes: $t.kind
+  of argNativeTypes: $t.kind & "(" & $t.nativeArgs & ")"
   if t.properties.len != 0:
     result.add(" {") 
     var afterFirst = false
