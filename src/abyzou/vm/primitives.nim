@@ -37,6 +37,7 @@ type
     vReference
       ## reference value, can be mutable
       ## only value kind with reference semantics
+      # XXX (references) ^ make this wrong with module idea, this can stay otherwise though
     vArray
       ## like java array but typed like TS, implementation of tuples
     vNativeFunction
@@ -64,7 +65,43 @@ type
     # bigints can be added
     # native types in general can be BoxedValue[pointer]
 
+  NativeType* = enum
+    tyNoType = "<none>",
+    # weird concrete
+    tyInstance = "<instance>",
+    tyTuple = "Tuple",
+    # concrete
+    tyNoneValue = "NoneValue",
+    tyInt32 = "Int32", tyUint32 = "Uint32", tyFloat32 = "Float32", tyBool = "Bool",
+    tyInt64 = "Int64", tyUint64 = "Uint64", tyFloat64 = "Float64",
+    tyReference = "Reference",
+    tyFunction = "Function",
+    tyList = "List",
+    tyString = "String",
+    tySet = "Set",
+    tyTable = "Table",
+    tyExpression = "Expression", tyStatement = "Statement", tyContext = "Context", tyModule = "Module",
+    tyType = "Type",
+    # typeclass
+    tyAny = "Any", tyAll = "All",
+    tyUnion = "Union", tyIntersection = "Intersection", tyNot = "Not"
+    tyBase = "<base>",
+    tyNativeBase = "<native base>",
+    tyTupleConstructor = "TupleConstructor"
+    tySomeValue = "SomeValue"
+    # generic parameter
+    tyParameter = "Parameter",
+    # value container
+    tyValue = "Value"
+
 const unboxedValueKinds* = {vNone..pred(vBoxed)}
+const
+  basicNativeTypes* = {tyNoneValue..tyType, tyTupleConstructor}
+  nullaryBasicNativeTypes* = {tyNoneValue..tyFloat64, tyString, tyExpression, tyStatement, tyContext, tyModule}
+  argBasicNativeTypes* = basicNativeTypes - nullaryBasicNativeTypes
+  allTypeKinds* = {low(NativeType)..high(NativeType)}
+  concreteTypeKinds* = {tyTuple, #[tyInstance,]# tyNoneValue..tyType}
+  typeclassTypeKinds* = {tyAny..tySomeValue}
 
 type
   BoxedValueObj*[T] = object
@@ -106,11 +143,9 @@ type
     of vType:
       typeValue*: BoxedValue[Type]
     of vString:
-      # XXX (byte layout) use manta growable arrays
       # XXX (byte layout, references) maybe match pointer field location with vArray, vList
       stringValue*: BoxedValue[string]
     of vList:
-      # XXX (byte layout) use manta growable arrays
       # XXX (byte layout, references) maybe match pointer field location with vArray, vString
       listValue*: BoxedValue[seq[Value]]
     of vSet:
@@ -141,28 +176,27 @@ type
   
   Value* = ValueObj
 
-  TypeKind* = enum
-    # maybe add unknown type for values with unknown type at runtime
-    tyNoType,
-    # concrete
-    tyInstance,
-    tyTuple, # XXX (tuple type) make into tyComposite, tuple, named tuple, array (i.e. int^20) all at once
-    # typeclass
-    tyAny, tyAll, ## top and bottom types
-    tyUnion, tyIntersection, tyNot,
-    tyBase,
-    tySomeValue,
-    # generic parameter
-    tyParameter,
-    # value container
-    tyValue
+  #TypeKind* = enum
+  #  # maybe add unknown type for values with unknown type at runtime
+  #  tyNoType,
+  #  # concrete
+  #  tyInstance,
+  #  tyTuple, # XXX (tuple type) make into tyComposite, tuple, named tuple, array (i.e. int^20) all at once
+  #  # typeclass
+  #  tyAny, tyAll, ## top and bottom types
+  #  tyUnion, tyIntersection, tyNot,
+  #  tyBase,
+  #  tySomeValue,
+  #  # generic parameter
+  #  tyParameter,
+  #  # value container
+  #  tyValue
     
   MatchLevel* = enum
     # in order of strength
     tmUnknown, tmNone,
-    tmFiniteFalse, tmFalse,
-    tmUniversalFalse, tmUniversalTrue
-    tmTrue, tmFiniteTrue,
+    tmFiniteFalse, tmFalse, tmUniversalFalse,
+    tmUniversalTrue, tmTrue, tmFiniteTrue,
     tmSimilar, tmGeneric,
     tmAlmostEqual, tmEqual
   
@@ -183,25 +217,6 @@ type
     strict*: bool
     table*: Table[TypeParameter, Type]
 
-  NativeType* = enum
-    ntyNone,
-    # weird concrete
-    ntyTuple,
-    # concrete
-    ntyNoneValue,
-    ntyInt32, ntyUint32, ntyFloat32, ntyBool,
-    ntyInt64, ntyUint64, ntyFloat64,
-    ntyReference,
-    ntyFunction,
-    ntyList,
-    ntyString,
-    ntySet,
-    ntyTable,
-    ntyExpression, ntyStatement, ntyContext, ntyModule,
-    ntyType,
-    # typeclass
-    ntyTupleConstructor
-
   TypeBase* = ref object
     # XXX (types) check arguments at generic fill time
     id*: TypeBaseId
@@ -217,16 +232,21 @@ type
     name*: string
     bound*: TypeBound
 
+  Properties* = ref object
+    leaves*: array[4, (TypeBase, Type)]
+    rest*: Properties
+
   Type* = object
     # XXX (types) 90 bytes - change these tables out for something smaller
     # XXX (types) figure out which kinds to merge with tyInstance (XXX (tuple type) at least tyTuple)
     properties*: Table[TypeBase, Type]
+      # XXX redo these
       # can be a multitable later on
-    case kind*: TypeKind
-    of tyNoType, tyAny, tyAll: discard
+    case kind*: NativeType
+    of tyNoType: discard
     of tyInstance:
-      base*: TypeBase
-      baseArguments*: seq[Type]
+      instanceBase*: TypeBase
+      instanceArgs*: seq[Type]
     of tyTuple:
       elements*: seq[Type]
       varargs*: Box[Type] # for now only trailing
@@ -235,12 +255,18 @@ type
       elementNames*: Table[string, int]
       # XXX (tuple type) also Defaults purely for initialization/conversion?
       # meaning only considered in function type relation
+    of nullaryBasicNativeTypes: discard
+    of argBasicNativeTypes:
+      nativeArgs*: seq[Type]
+    of tyBase:
+      typeBase*: TypeBase
+    of tyNativeBase:
+      nativeBase*: NativeType
+    of tyAny, tyAll: discard
     of tyUnion, tyIntersection:
       operands*: seq[Type]
     of tyNot:
       notType*: Box[Type]
-    of tyBase:
-      typeBase*: TypeBase
     of tySomeValue:
       someValueType*: Box[Type]
     of tyParameter:

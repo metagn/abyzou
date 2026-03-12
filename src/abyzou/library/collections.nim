@@ -26,7 +26,7 @@ module collections:
       args[0].referenceValue.realRef[] = args[1]
   # XXX (dispatch) maybe move this to compilation, or allow dynamic dispatch of .[] some other way
   define ".[]", funcType(StatementTy, [ContextTy, StatementTy, StatementTy]).withProperties(
-    property(Meta, funcType(AnyTy, [Type(kind: tyBase, typeBase: TupleTy), Int32Ty]))
+    property(Meta, funcType(AnyTy, [baseType(TupleTy), Int32Ty]))
   ), toValue proc (valueArgs: openarray[Value]): Value =
     let context = valueArgs[0].contextValue.value
     let index = context.scope.module.evaluateStatic(valueArgs[2].statementValue.toInstruction)

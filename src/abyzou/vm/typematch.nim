@@ -10,11 +10,6 @@ type
     conflicting*: Type
 
 const
-  allTypeKinds* = {low(TypeKind)..high(TypeKind)}
-  concreteTypeKinds* = {tyTuple}
-  typeclassTypeKinds* = {tyAny..tySomeValue}
-  allNativeTypes* = {low(NativeType)..high(NativeType)}
-  concreteNativeTypes* = {ntyNoneValue..ntyType}
   highestNonMatching* = tmUniversalFalse
   lowestMatching* = tmUniversalTrue
 
@@ -179,49 +174,91 @@ proc match*(matcher, t: Type, inst: var ParameterInstantiation): TypeMatch =
   result = case matcher.kind
   of tyNoType: atomicMatch(tmUnknown)
   of tyInstance:
-    case matcher.base.nativeType
-    of ntyTupleConstructor:
-      case t.kind
-      of tyInstance:
-        if matcher.base == t.base:
-          match(matcher.baseArguments[0], t.baseArguments[0])
-        else: atomicMatch(tmUnknown)
-      of tyTuple:
-        var mr = matcher.baseArguments[0]
-        var dummy: seq[Statement]
-        reorderTupleConstructor(mr, t, dummy)
-        match(mr, t)
-      else: atomicMatch(tmUnknown)
-    elif unlikely(not matcher.base.typeMatcher.isNil):
-      matcher.base.typeMatcher(matcher, t, inst)
+    if unlikely(not matcher.instanceBase.typeMatcher.isNil):
+      matcher.instanceBase.typeMatcher(matcher, t, inst)
     else:
-      case t.kind
-      of tyInstance:
-        let mnt = matcher.base.nativeType
-        let tnt = t.base.nativeType
-        if mnt != tnt:
-          return if {mnt, tnt} <= concreteNativeTypes:
-            atomicMatch(tmNone)
-          else:
-            atomicMatch(tmUnknown)
-      # XXX (types) handle native types in TypeKind (why? we have nativetypekind)
-      else: return atomicMatch(tmUnknown)
-      if matcher.base != t.base: return atomicMatch(tmUnknown)
+      # XXX native type normalization here
+      let mnt = matcher.instanceBase.nativeType
+      let tnt =
+        case t.kind
+        of tyInstance: t.instanceBase.nativeType
+        #of tyBase: t.typeBase.nativeType
+        #of tyNativeBase: t.nativeBase
+        else: t.kind
+      if mnt != tnt:
+        return if {mnt, tnt} <= concreteTypeKinds:
+          atomicMatch(tmNone)
+        else:
+          atomicMatch(tmUnknown)
+      if t.kind == tyInstance and matcher.instanceBase != t.instanceBase: return atomicMatch(tmUnknown)
+      let margBounds #[{.cursor.}]# = matcher.instanceBase.arguments
+      let targs #[{.cursor.}]# =
+        case t.kind
+        of tyInstance: t.instanceArgs
+        #of tyBase, tyNativeBase: @[]
+        else: t.nativeArgs
       var res = atomicMatch(tmAlmostEqual)
-      let len = matcher.base.arguments.len
+      let len = margBounds.len
       if len > 0:
         res = TypeMatch(level: tmAlmostEqual, deep: true)
         res.children.newSeq(len)
         for i in 0 ..< len:
-          let v = matcher.base.arguments[i].bound.variance
-          let m = match(matcher.baseArguments[i] * v, t.baseArguments[i])
+          let v = margBounds[i].bound.variance
+          let m = match(matcher.instanceArgs[i] * v, targs[i])
           res.children[i] = m
           if m.level < res.level: res.level = m.level
           if res.level <= tmNone: return res
       res
+  #of nullaryBasicNativeTypes:
+  #  let tkind =
+  #    case t.kind
+  #    of tyInstance: t.instanceBase.nativeType
+  #    of tyBase: t.typeBase.nativeType
+  #    else: t.kind
+  #  if matcher.kind != tkind:
+  #    return if {matcher.kind, tkind} <= concreteTypeKinds:
+  #      atomicMatch(tmNone)
+  #    else:
+  #      atomicMatch(tmUnknown)
+  #  atomicMatch(tmAlmostEqual)
+  of basicNativeTypes * concreteTypeKinds:# - nullaryBasicNativeTypes - {tyTupleConstructor}:
+    # XXX native type normalization here
+    let tnt =
+      case t.kind
+      of tyInstance: t.instanceBase.nativeType
+      #of tyBase: t.typeBase.nativeType
+      #of tyNativeBase: t.nativeBase
+      else: t.kind
+    if matcher.kind != tnt:
+      return if tnt in concreteTypeKinds:
+        atomicMatch(tmNone)
+      else:
+        atomicMatch(tmUnknown)
+    let margBounds #[{.cursor.}]# = nativeTypeArgs[matcher.kind]
+    let targs #[{.cursor.}]# =
+      case t.kind
+      of tyInstance: t.instanceArgs
+      #of tyBase, tyNativeBase: @[]
+      else: t.nativeArgs
+    var res = atomicMatch(tmAlmostEqual)
+    let len = margBounds.len#matcher.instanceBase.arguments.len
+    if len > 0:
+      res = TypeMatch(level: tmAlmostEqual, deep: true)
+      res.children.newSeq(len)
+      for i in 0 ..< len:
+        let v = margBounds[i].variance
+        let m = match(matcher.nativeArgs[i] * v, targs[i])
+        res.children[i] = m
+        if m.level < res.level: res.level = m.level
+        if res.level <= tmNone: return res
+    res
   of tyTuple:
+    # XXX no native type normalization here
     if matcher.kind != t.kind:
-      return atomicMatch(tmUnknown)
+      return if t.kind in concreteTypeKinds:
+        atomicMatch(tmNone)
+      else:
+        atomicMatch(tmUnknown)
     if matcher.elements.len != t.elements.len and matcher.varargs.isNoType and t.varargs.isNoType:
       return atomicMatch(tmNone)
     var max = t.elements.len
@@ -264,17 +301,60 @@ proc match*(matcher, t: Type, inst: var ParameterInstantiation): TypeMatch =
     min
   of tyNot:
     boolMatch not match(matcher.notType.unbox, t).matches
-  of tyBase:
-    if matcher.typeBase.nativeType == ntyTuple and t.kind == tyTuple:
-      return atomicMatch(tmTrue)
-    # in nim a dummy instance type is created from the base and compared
+  of tyNativeBase:
+    # XXX native type normalization here
+    let mnt = matcher.nativeBase
     case t.kind
     of tyBase:
-      if matcher.typeBase == t.typeBase: atomicMatch(tmAlmostEqual)
+      if mnt == t.typeBase.nativeType: atomicMatch(tmAlmostEqual)
+      else: atomicMatch(tmNone)
+    of tyNativeBase:
+      if mnt == t.nativeBase: atomicMatch(tmAlmostEqual)
       else: atomicMatch(tmNone)
     of tyInstance:
-      boolMatch matcher.typeBase == t.base
+      boolMatch mnt == t.instanceBase.nativeType
+    elif t.kind == mnt: atomicMatch(tmTrue)
     else: atomicMatch(tmNone)
+    # XXX use unknown?
+  of tyBase:
+    # XXX native type normalization here
+    let mnt = matcher.typeBase.nativeType
+    # in nim a dummy instance type is created from the base and compared
+    if mnt != tyNoType:
+      case t.kind
+      of tyBase:
+        if matcher.typeBase == t.typeBase or mnt == t.typeBase.nativeType: atomicMatch(tmAlmostEqual)
+        else: atomicMatch(tmNone)
+      of tyNativeBase:
+        if mnt == t.nativeBase: atomicMatch(tmAlmostEqual)
+        else: atomicMatch(tmNone)
+      of tyInstance:
+        boolMatch matcher.typeBase == t.instanceBase or mnt == t.instanceBase.nativeType
+      elif t.kind == mnt: atomicMatch(tmTrue)
+      else: atomicMatch(tmNone)
+    else:
+      case t.kind
+      of tyBase:
+        if matcher.typeBase == t.typeBase: atomicMatch(tmAlmostEqual)
+        else: atomicMatch(tmNone)
+      of tyInstance:
+        boolMatch matcher.typeBase == t.instanceBase
+      else: atomicMatch(tmNone)
+    # XXX use unknown?
+  of tyTupleConstructor:
+    # XXX native type normalization here???
+    case t.kind
+    of tyInstance:
+      if t.instanceBase.nativeType == tyTupleConstructor:
+        match(matcher.nativeArgs[0], t.instanceArgs[0])
+      # XXX no tuple support here
+      else: atomicMatch(tmUnknown)
+    of tyTuple:
+      var mr = matcher.nativeArgs[0]
+      var dummy: seq[Statement]
+      reorderTupleConstructor(mr, t, dummy)
+      match(mr, t)
+    else: atomicMatch(tmUnknown)
   of tySomeValue:
     case t.kind
     of tySomeValue:
