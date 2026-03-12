@@ -38,7 +38,7 @@ module syntax:
       v = scope.define(name, fnType)
     let body = bodyScope.compile(body, returnBound)
     if not v.isNil and not returnBoundSet:
-      v.knownType.baseArguments[1] = body.knownType
+      v.knownType.nativeArgs[1] = body.knownType
     var fun: Value
     if useBytecode:
       let lc = linear(bodyScope.module, body)

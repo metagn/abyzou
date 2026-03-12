@@ -51,21 +51,21 @@ proc getType*(x: Value): Type =
     of vLinearFunction:
       boxedType x.linearFunctionValue
     else: discard
-    result = Type(kind: tyBase, typeBase: FunctionTy)
+    result = baseType(FunctionTy)
     # could save signature into Function object
     # but we can still use the type field in FullValue
   of vSet:
     boxedType x.setValue
     result = SetTy[AnyTy]
     for v in x.setValue.value:
-      result.baseArguments[0] = v.getType
+      result.nativeArgs[0] = v.getType
       break
   of vTable:
     boxedType x.tableValue
     result = TableTy[AnyTy, AnyTy]
     for k, v in x.tableValue.value:
-      result.baseArguments[0] = k.getType
-      result.baseArguments[1] = v.getType
+      result.nativeArgs[0] = k.getType
+      result.nativeArgs[1] = v.getType
       break
   of vEffect:
     # probably should never be here

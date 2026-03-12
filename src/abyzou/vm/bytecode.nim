@@ -173,8 +173,9 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
       let fn {.cursor.} = get instr.tdisp.callee
       let argsVal = get instr.tdisp.args
       let t = fn.getType
-      assert t.kind == tyInstance and t.base.nativeType == ntyFunction, $t
-      let argt = t.baseArguments[0]
+      # XXX no native type normalization here
+      assert t.kind == tyFunction, $t#t.kind == tyInstance and t.base.nativeType == tyFunction, $t
+      let argt = t.nativeArgs[0]
       if argsVal.checkType(argt):
         let args = argsVal.tupleValue.unref
         let fn = unboxStripType fn

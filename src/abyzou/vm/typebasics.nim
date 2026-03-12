@@ -43,13 +43,50 @@ template nativeType(n: untyped, typename: static string, nt: NativeType, args: v
     arguments: toTypeParams(args))
 
 template nativeType(n: untyped, args: varargs[TypeBound]) =
-  nativeType(`n Ty`, astToStr(n), `nty n`, args)
+  nativeType(`n Ty`, astToStr(n), `ty n`, args)
 
 template nativeAtomicType(n: untyped) =
-  nativeType(`n TyBase`, astToStr(n), `nty n`)
-  template `n Ty`*: untyped = Type(kind: tyInstance, base: `n TyBase`)
+  nativeType(`n TyBase`, astToStr(n), `ty n`)
+  template `n Ty`*: untyped = Type(kind: `ty n`)#Type(kind: tyInstance, base: `n TyBase`)
 
-nativeType TupleTy, "Tuple", ntyTuple, [] # not used for tuple type construction
+nativeType TupleTy, "Tuple", tyTuple, [] # not used for tuple type construction
+
+proc nativeBase*(kind: NativeType): Type {.inline.} =
+  Type(kind: tyNativeBase, nativeBase: kind)
+
+proc baseType*(base: TypeBase): Type {.inline.} =
+  if base.nativeType != tyNoType:
+    Type(kind: tyNativeBase, nativeBase: base.nativeType)
+  else:
+    Type(kind: tyBase, typeBase: base)
+
+let nativeTypeArgs*: array[NativeType, seq[TypeBound]] = [
+  tyNoType: @[],
+  # weird concrete
+  tyInstance: @[], tyTuple: @[], # - not native
+  # concrete
+  tyNoneValue: @[],
+  tyInt32: @[], tyUint32: @[], tyFloat32: @[], tyBool: @[],
+  tyInt64: @[], tyUint64: @[], tyFloat64: @[],
+  tyReference: @[+AnyTy],
+  tyFunction: @[+baseType(TupleTy), -AllTy],
+  tyList: @[+AnyTy],
+  tyString: @[],
+  tySet: @[+AnyTy],
+  tyTable: @[+AnyTy, +AnyTy],
+  tyExpression: @[], tyStatement: @[], tyContext: @[], tyModule: @[],
+  tyType: @[+AnyTy],
+  # typeclass
+  tyAny: @[], tyAll: @[], # - not native
+  tyUnion: @[], tyIntersection: @[], tyNot: @[], # - not native
+  tyBase: @[], tyNativeBase: @[], # - not native
+  tyTupleConstructor: @[+baseType(TupleTy)],
+  tySomeValue: @[+AnyTy], # - not native
+  # generic parameter
+  tyParameter: @[], # - not native
+  # value container
+  tyValue: @[] # - not native
+]
 
 nativeAtomicType NoneValue
 nativeAtomicType Int32
@@ -68,13 +105,20 @@ nativeType Reference, [+AnyTy]
 nativeType List, [+AnyTy]
 nativeType Set, [+AnyTy]
 nativeType Table, [+AnyTy, +AnyTy]
-nativeType Function, [+Type(kind: tyBase, typeBase: TupleTy), -AllTy]
+nativeType Function, [+baseType(TupleTy), -AllTy]
 nativeType Type, [+AnyTy]
 
-nativeType TupleConstructor, [+Type(kind: tyBase, typeBase: TupleTy)]
+nativeType TupleConstructor, [+baseType(TupleTy)]
 
 proc instance*(tag: TypeBase, args: varargs[Type]): Type {.inline.} =
-  Type(kind: tyInstance, base: tag, baseArguments: @args)
+  let tnt = tag.nativeType
+  case tnt
+  of noArgNativeTypes:
+    Type(kind: tnt)
+  of argNativeTypes:
+    Type(kind: tnt, nativeArgs: @args)
+  else:
+    Type(kind: tyInstance, instanceBase: tag, instanceArgs: @args)
 
 template `!`*(tag: TypeBase): Type = instance(tag)
 template `[]`*(tag: TypeBase, args: varargs[Type]): Type = instance(tag, args)
@@ -89,7 +133,7 @@ proc property*(prop: Type): Type {.inline.} =
 proc properties*(ps: varargs[Type, property]): Table[TypeBase, Type] =
   result = initTable[TypeBase, Type](ps.len)
   for p in ps:
-    result[p.base] = p
+    result[p.instanceBase] = p
 
 proc withProperties*(ty: sink Type, ps: varargs[Type, property]): Type {.inline.} =
   ty.properties = properties(ps)
@@ -118,21 +162,37 @@ proc union*(s: varargs[Type]): Type =
 
 proc unwrapTypeType*(t: Type): Type {.inline.} =
   result = t
-  if t.kind == tyInstance and t.base.nativeType == ntyType:
-    result = t.baseArguments[0]
+  # XXX no native type normalization here
+  if t.kind == tyType:#t.kind == tyInstance and t.base.nativeType == tyType:
+    result = t.nativeArgs[0]
 
 const definiteTypeLengths*: array[TypeKind, int] = [
   tyNoType: 0,
+  # weird concrete
   tyInstance: -1,
   tyTuple: -1,
-  tyAny: 0,
-  tyAll: 0,
-  tyUnion: -1,
-  tyIntersection: -1,
-  tyNot: 1,
+  # concrete
+  tyNoneValue: 0,
+  tyInt32: 0, tyUint32: 0, tyFloat32: 0, tyBool: 0,
+  tyInt64: 0, tyUint64: 0, tyFloat64: 0,
+  tyReference: 1,
+  tyFunction: 2,
+  tyList: 1,
+  tyString: 0,
+  tySet: 1,
+  tyTable: 2,
+  tyExpression: 0, tyStatement: 0, tyContext: 0, tyModule: 0,
+  tyType: 1,
+  # typeclass
+  tyAny: 0, tyAll: 0,
+  tyUnion: -1, tyIntersection: -1, tyNot: 1,
   tyBase: 0,
+  tyNativeBase: 0,
+  tyTupleConstructor: 1,
   tySomeValue: 1,
+  # generic parameter
   tyParameter: -1,
+  # value container
   tyValue: -1
 ]
 
@@ -144,7 +204,7 @@ proc len*(t: Type): int =
       if t.varargs.isNoType:
         result = t.elements.len
     of tyInstance:
-      result = t.baseArguments.len
+      result = t.instanceArgs.len
     of tyUnion, tyIntersection:
       result = t.operands.len
     else: discard
@@ -154,30 +214,33 @@ proc hasNth*(t: Type, i: int): bool {.inline.} =
 
 proc nth*(t: Type, i: int): Type =
   case t.kind
-  of tyNoType, tyAny, tyAll:
+  of tyNoType, tyAny, tyAll, noArgNativeTypes:
     discard # inapplicable
+  of tyBase, tyNativeBase:
+    discard # inapplicable
+  of tyInstance:
+    result = t.instanceArgs[i]
   of tyTuple:
     if i < t.elements.len or t.varargs.isNoType:
       result = t.elements[i]
     else:
       result = t.varargs.unbox
-  of tyInstance:
-    result = t.baseArguments[i]
+  of argNativeTypes:
+    result = t.nativeArgs[i]
   of tyUnion, tyIntersection:
     # this is actually not supposed to happen
     result = t.operands[i]
   of tyNot:
     result = t.notType.unbox
-  of tyBase:
-    discard # inapplicable
   of tySomeValue:
     result = t.someValueType.unbox
   of tyParameter, tyValue:
     discard # what
 
 proc param*(t: Type, i: int): Type {.inline.} =
-  assert t.kind == tyInstance and t.base.nativeType == ntyFunction
-  t.baseArguments[0].nth(i)
+  # XXX no native type normalization here
+  assert t.kind == tyFunction#t.kind == tyInstance and t.base.nativeType == tyFunction
+  t.nativeArgs[0].nth(i)
 
 proc fillParameters*(pattern: var Type, table: ParameterInstantiation) =
   template fill(a: var Type) = fillParameters(a, table)
@@ -189,19 +252,22 @@ proc fillParameters*(pattern: var Type, table: ParameterInstantiation) =
   case pattern.kind
   of tyParameter:
     pattern = table.table[pattern.parameter]
-  of tyNoType, tyAny, tyAll, tyBase:
+  of tyNoType, tyAny, tyAll, tyBase, tyNativeBase, noArgNativeTypes:
     discard
   of tyInstance:
     # XXX (types) check argument bounds
-    if unlikely(not pattern.base.paramFiller.isNil):
-      pattern.base.paramFiller(pattern, table)
+    if unlikely(not pattern.instanceBase.paramFiller.isNil):
+      pattern.instanceBase.paramFiller(pattern, table)
     else:
-      for t in pattern.baseArguments.mitems:
+      for t in pattern.instanceArgs.mitems:
         fill(t)
   of tyTuple:
     for e in pattern.elements.mitems:
       fill(e)
     fill(pattern.varargs)
+  of argNativeTypes:
+    for t in pattern.nativeArgs.mitems:
+      fill(t)
   of tyUnion, tyIntersection:
     for o in pattern.operands.mitems:
       fill(o)

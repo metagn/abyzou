@@ -6,7 +6,7 @@ import
     valueconstr, guesstype, treewalk, linearizer, programs]
 
 defineTypeBase Meta, TypeBase(name: "Meta",
-  arguments: @[newTypeParameter("", +Type(kind: tyBase, typeBase: FunctionTy))])
+  arguments: @[newTypeParameter("", +baseType(FunctionTy))])
 
 proc newVariable*(name: string, knownType: Type = NoType): Variable =
   Variable(id: newVariableId(), name: name, nameHash: name.hash, knownType: knownType)
@@ -252,7 +252,8 @@ template constant*(value: uint32): Statement = constant(value, Uint32Ty)
 template constant*(value: float32): Statement = constant(value, Float32Ty)
 
 proc isNative(bound: TypeBound, nt: NativeType): bool {.inline.} =
-  bound.boundType.kind == tyInstance and bound.boundType.base.nativeType == nt
+  # XXX no native type normalization here
+  bound.boundType.kind == nt#bound.boundType.kind == tyInstance and bound.boundType.base.nativeType == nt
 
 proc compileNumber*(ex: Expression, bound: TypeBound): Statement =
   let s = $ex.number
@@ -260,9 +261,9 @@ proc compileNumber*(ex: Expression, bound: TypeBound): Statement =
   case ex.number.kind
   of Integer:
     let val = parseInt(s)
-    if isNative(bound, ntyFloat32):
+    if isNative(bound, tyFloat32):
       result = constant(val.float32)
-    elif val >= 0 and isNative(bound, ntyUint32):
+    elif val >= 0 and isNative(bound, tyUint32):
       result = constant(val.uint32)
     else:
       result = constant(val.int32)
@@ -361,7 +362,7 @@ proc compileMetaCall*(scope: Scope, name: string, ex: Expression, bound: TypeBou
     var metaTypes = newSeq[Type](allMetas.len)
     for i, v in allMetas:
       let ty = v.type
-      let metaTy = v.type.properties[Meta].baseArguments[0]
+      let metaTy = v.type.properties[Meta].instanceArgs[0]
       metaTypes[i] = metaTy
       for i in 0 ..< ex.arguments.len:
         if matchBound(+StatementTy, ty.param(i + 1)):
@@ -424,7 +425,7 @@ proc compileMetaCall*(scope: Scope, name: string, ex: Expression, bound: TypeBou
         arguments[0] = toValue Context(scope: scope, bound: bound)
         var variableCheckTypes = newSeq[Type](ex.arguments.len)
         var noMatch = false
-        let metaTy = d.type.properties[Meta].baseArguments[0].baseArguments[0]
+        let metaTy = d.type.properties[Meta].instanceArgs[0].nativeArgs[0]
         var newVariables: seq[(Statement, Variable)]
         for i in 0 ..< ex.arguments.len:
           if matchBound(+StatementTy, d.type.param(i + 1)):
@@ -506,19 +507,19 @@ proc compileRuntimeCall*(scope: Scope, ex: Expression, bound: TypeBound,
   try:
     # XXX (tuple types) named arguments
     var withConstructor = functionType
-    withConstructor.baseArguments[0] = TupleConstructorTy[withConstructor.baseArguments[0]]
+    withConstructor.nativeArgs[0] = TupleConstructorTy[withConstructor.nativeArgs[0]]
     let callee = map(ex.address, -withConstructor)
-    reorderTupleConstructor(withConstructor.baseArguments[0].baseArguments[0],
-      callee.knownType.baseArguments[0],
+    reorderTupleConstructor(withConstructor.nativeArgs[0].nativeArgs[0],
+      callee.knownType.nativeArgs[0],
       argumentStatements)
     result = Statement(kind: skFunctionCall,
-      knownType: callee.knownType.baseArguments[1],
+      knownType: callee.knownType.nativeArgs[1],
       callee: callee,
       arguments: argumentStatements)
   except NoOverloadFoundError as e:
     # dispatch lowest subtype functions in order:
     if same(e.expression, ex.address) and ex.address.isIdentifier(name):
-      functionType.baseArguments[1] =
+      functionType.nativeArgs[1] =
         if bound.variance == Covariant:
           AllTy
         else:
@@ -543,7 +544,7 @@ proc compileRuntimeCall*(scope: Scope, ex: Expression, bound: TypeBound,
             else:
               argTypes[j] = pt
           result.dispatchees[i] = (argTypes, variableGet(scope.module, subs[i]))
-          result.knownType = commonSuperType(result.knownType, t.baseArguments[1])
+          result.knownType = commonSuperType(result.knownType, t.nativeArgs[1])
             # could allow union here
 
 proc compileCall*(scope: Scope, ex: Expression, bound: TypeBound,
@@ -566,7 +567,7 @@ proc compileCall*(scope: Scope, ex: Expression, bound: TypeBound,
       if overs.len != 0:
         let dotCall = variableGet(scope.module, overs[0])
         result = Statement(kind: skFunctionCall,
-          knownType: dotCall.knownType.baseArguments[1],
+          knownType: dotCall.knownType.nativeArgs[1],
           callee: callee,
           arguments: argumentStatements)
       else:
@@ -602,17 +603,17 @@ proc compileTupleExpression*(scope: Scope, ex: Expression, bound: TypeBound): St
 
 proc compileArrayExpression*(scope: Scope, ex: Expression, bound: TypeBound): Statement =
   result = Statement(kind: skList, knownType: ListTy[AnyTy])
-  var boundSet = isNative(bound, ntyList)
+  var boundSet = isNative(bound, tyList)
   var b =
     if boundSet:
-      bound.boundType.baseArguments[0] * bound.variance
+      bound.boundType.nativeArgs[0] * bound.variance
     else:
       defaultBound
   for e in ex.elements:
     let element = map(e, b)
     result.elements.add(element)
-    if result.knownType.baseArguments[0].isNoType or result.knownType.baseArguments[0] < element.knownType:
-      result.knownType.baseArguments[0] = element.knownType
+    if result.knownType.nativeArgs[0].isNoType or result.knownType.nativeArgs[0] < element.knownType:
+      result.knownType.nativeArgs[0] = element.knownType
     if not boundSet:
       b = +element.knownType
       boundSet = true
@@ -621,11 +622,11 @@ proc compileSetExpression*(scope: Scope, ex: Expression, bound: TypeBound): Stat
   if ex.elements.len != 0 and (ex.elements[0].kind == Colon or
     ex.elements[0].isSingleColon):
     result = Statement(kind: skTable, knownType: TableTy[AnyTy, AnyTy])
-    var boundSet = isNative(bound, ntyTable)
+    var boundSet = isNative(bound, tyTable)
     var (bk, bv) =
       if boundSet:
-        (bound.boundType.baseArguments[0] * bound.variance,
-          bound.boundType.baseArguments[1] * bound.variance)
+        (bound.boundType.nativeArgs[0] * bound.variance,
+          bound.boundType.nativeArgs[1] * bound.variance)
       else:
         (defaultBound, defaultBound)
     for e in ex.elements:
@@ -634,27 +635,27 @@ proc compileSetExpression*(scope: Scope, ex: Expression, bound: TypeBound): Stat
       let k = map(e.left, bk)
       let v = map(e.right, bv)
       result.entries.add((key: k, value: v))
-      if result.knownType.baseArguments[0].isNoType or result.knownType.baseArguments[0] < k.knownType:
-        result.knownType.baseArguments[0] = k.knownType
-      if result.knownType.baseArguments[1].isNoType or result.knownType.baseArguments[1] < v.knownType:
-        result.knownType.baseArguments[1] = v.knownType
+      if result.knownType.nativeArgs[0].isNoType or result.knownType.nativeArgs[0] < k.knownType:
+        result.knownType.nativeArgs[0] = k.knownType
+      if result.knownType.nativeArgs[1].isNoType or result.knownType.nativeArgs[1] < v.knownType:
+        result.knownType.nativeArgs[1] = v.knownType
       if not boundSet:
         bk = +k.knownType
         bv = +v.knownType
         boundSet = true
   else:
     result = Statement(kind: skSet, knownType: SetTy[AnyTy])
-    var boundSet = isNative(bound, ntySet) 
+    var boundSet = isNative(bound, tySet) 
     var b =
       if boundSet:
-        bound.boundType.baseArguments[0] * bound.variance
+        bound.boundType.nativeArgs[0] * bound.variance
       else:
         defaultBound
     for e in ex.elements:
       let element = map(e, b)
       result.elements.add(element)
-      if result.knownType.baseArguments[0].isNoType or result.knownType.baseArguments[0] < element.knownType:
-        result.knownType.baseArguments[0] = element.knownType
+      if result.knownType.nativeArgs[0].isNoType or result.knownType.nativeArgs[0] < element.knownType:
+        result.knownType.nativeArgs[0] = element.knownType
       if not boundSet:
         b = +element.knownType
         boundSet = true

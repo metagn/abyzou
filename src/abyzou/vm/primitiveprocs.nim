@@ -146,8 +146,8 @@ proc `$`*(t: Type): string =
         result.add(", ")
       result.add($t)
   result = case t.kind
-  of tyNoType: "NoType"
-  of tyInstance: t.base.name & "(" & $t.baseArguments & ")"
+  of tyNoType: "<none>"
+  of tyInstance: t.instanceBase.name & "(" & $t.instanceArgs & ")"
   of tyAny: "Any"
   of tyAll: "All"
   of tyTuple: "Tuple(" & $t.elements & (if t.varargs.isNoType: ")" else: ", " & $t.varargs & "...)")
@@ -155,9 +155,12 @@ proc `$`*(t: Type): string =
   of tyIntersection: "Intersection(" & $t.operands & ")"
   of tyNot: "Not " & $t.notType
   of tyBase: "Base(" & $t.typeBase & ")"
+  of tyNativeBase: "Base(" & $t.nativeBase & ")"
   of tySomeValue: "SomeValue(" & $t.someValueType & ")"
   of tyParameter: "Parameter(" & $t.parameter.name & ")"
   of tyValue: "Value(" & $t.value & ": " & $t.valueType & ")"
+  of noArgNativeTypes: $t.kind
+  of argNativeTypes: $t.kind & "(" & $t.nativeArgs & ")"
   if t.properties.len != 0:
     result.add(" {") 
     var afterFirst = false
