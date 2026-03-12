@@ -320,7 +320,7 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
       read instr.gri
       let coll = get instr.gri.coll
       let ind = get instr.gri.ind
-      # XXX (byte layout, references) maybe prevent dispatch here
+      # XXX [memory, references] maybe prevent dispatch here
       case coll.kind
       of vList:
         put instr.gri.res, coll.listValue.value.unref[ind.unboxStripType.int32Value]
@@ -336,7 +336,7 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
       let coll = get instr.sri.coll
       let ind = get instr.sri.ind
       let val = get instr.sri.val
-      # XXX (byte layout, references) maybe prevent dispatch here
+      # XXX [memory, references] maybe prevent dispatch here
       case coll.kind
       of vList:
         coll.listValue.value.unref[ind.unboxStripType.int32Value] = val

@@ -303,7 +303,7 @@ proc match*(matcher, t: Type, inst: var ParameterInstantiation): TypeMatch =
       boolMatch mnt == t.instanceBase.nativeType
     elif t.kind == mnt: atomicMatch(tmTrue)
     else: atomicMatch(tmNone)
-    # XXX (type matching) use unknown?
+    # XXX [typematch] use unknown?
   of tyBase:
     # XXX native type normalization here
     let mnt = matcher.typeBase.nativeType
@@ -328,14 +328,14 @@ proc match*(matcher, t: Type, inst: var ParameterInstantiation): TypeMatch =
       of tyInstance:
         boolMatch matcher.typeBase == t.instanceBase
       else: atomicMatch(tmNone)
-    # XXX (type matching) use unknown?
+    # XXX [typematch] use unknown?
   of tyTupleConstructor:
     # XXX native type normalization here???
     case t.kind
     of tyInstance:
       if t.instanceBase.nativeType == tyTupleConstructor:
         match(matcher.nativeArgs[0], t.instanceArgs[0])
-      # XXX (type matching, tuple types) no tuple support here
+      # XXX [typematch, tuple] no tuple support here
       else: atomicMatch(tmUnknown)
     of tyTuple:
       var mr = matcher.nativeArgs[0]

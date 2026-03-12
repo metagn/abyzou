@@ -347,7 +347,7 @@ proc compileMetaCall*(scope: Scope, name: string, ex: Expression, bound: TypeBou
   result = nil
   var argumentTypes = newSeq[Type](ex.arguments.len)
   for t in argumentTypes.mitems: t = AnyTy
-  # XXX (macros) validate output statement
+  # XXX [macros] validate output statement
   var realArgumentTypes = newSeq[Type](ex.arguments.len + 1)
   realArgumentTypes[0] = ContextTy
   for i in 1 ..< realArgumentTypes.len:
@@ -417,7 +417,7 @@ proc compileMetaCall*(scope: Scope, name: string, ex: Expression, bound: TypeBou
         arguments: arguments).toInstruction
       result = scope.module.evaluateStatic(call).statementValue
     elif subMetas.len != 0:
-      # XXX (dispatch) sub meta dispatch, needs better output and described semantics
+      # XXX [dispatch] sub meta dispatch, needs better output and described semantics
       var argumentValues = newSeq[Variable](ex.arguments.len)
       var dispatches: seq[tuple[condition, body: Statement]]
       for d in subMetas:
@@ -505,7 +505,7 @@ proc compileRuntimeCall*(scope: Scope, ex: Expression, bound: TypeBound,
   functionType = funcType(if bound.variance == Contravariant: AnyTy else: bound.boundType, argumentTypes)
   # lowest supertype function:
   try:
-    # XXX (tuple types) named arguments
+    # XXX [tuple] named arguments
     var withConstructor = functionType
     withConstructor.nativeArgs[0] = TupleConstructorTy[withConstructor.nativeArgs[0]]
     let callee = map(ex.address, -withConstructor)
@@ -539,7 +539,7 @@ proc compileRuntimeCall*(scope: Scope, ex: Expression, bound: TypeBound,
             let m = match(-argumentTypes[j], pt)
             if m.matches:
               # optimize checking types we know match
-              # XXX (type matching) do this recursively using deep matches for some types
+              # XXX [typematch] do this recursively using deep matches for some types
               argTypes[j] = AnyTy
             else:
               argTypes[j] = pt
@@ -581,7 +581,7 @@ proc compileCall*(scope: Scope, ex: Expression, bound: TypeBound,
             " found for argument types " & $argumentTypes)
 
 proc compileTupleExpression*(scope: Scope, ex: Expression, bound: TypeBound): Statement =
-  # XXX tuple type sugar?
+  # XXX [tuple] tuple type sugar?
   if bound.boundType.kind == tyTuple:
     assert bound.boundType.elements.len == ex.elements.len, "tuple bound type lengths do not match"
   result = Statement(kind: skTuple, knownType: Type(kind: tyTuple, elements: newSeqOfCap[Type](ex.elements.len)))
@@ -680,7 +680,7 @@ proc compile*(scope: Scope, ex: Expression, bound: TypeBound): Statement =
   of String, SingleQuoteString: result = constant(ex.str)
   of Wrapped: result = forward(ex.wrapped)
   of Name, Symbol:
-    # XXX warn on ambiguity, thankfully recency is accounted for
+    # XXX [namespace] warn on ambiguity, thankfully recency is accounted for
     let name = if ex.kind == Symbol: $ex.symbol else: ex.identifier
     result = variableGet(scope.module, resolve(scope, ex, name, bound))
   of Dot:
@@ -695,7 +695,7 @@ proc compile*(scope: Scope, ex: Expression, bound: TypeBound): Statement =
           arguments: @[ex.left, ex.right]))
   of CallKinds: result = compileCall(scope, ex, bound)
   of Subscript:
-    # XXX (types) specialize for generics
+    # XXX [types] specialize for generics
     result = forward(Expression(kind: PathCall,
       address: newSymbolExpression(short".[]"),
       arguments: @[ex.address] & ex.arguments))

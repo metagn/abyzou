@@ -14,7 +14,7 @@ module syntax:
     let st = context.scope.compile(args[0], +AnyTy)
     result = toValue constant(context.scope.module.evaluateStatic(st.toInstruction), st.knownType)
   
-  # XXX (types) generic assignments or functions
+  # XXX [types] generic assignments or functions
   proc makeFn(scope: Scope, arguments: seq[Expression], body: Expression,
     name: string, returnBound: TypeBound, returnBoundSet: bool): Statement =
     let module = scope.childModule()

@@ -37,7 +37,7 @@ type
     vReference
       ## reference value, can be mutable
       ## only value kind with reference semantics
-      # XXX (references) ^ make this wrong with module idea, this can stay otherwise though
+      # XXX [modules, references] ^ make this wrong with module idea, this can stay otherwise though
     vArray
       ## like java array but typed like TS, implementation of tuples
     vNativeFunction
@@ -46,7 +46,7 @@ type
     vExpression
     vStatement
     vModule
-      # XXX (references) implement accessing modules and module variables
+      # XXX [modules, references] implement accessing modules and module variables
     vBoxed
       ## boxed version of unboxed values, used for type info
     vInt64, vUint64, vFloat64
@@ -70,7 +70,7 @@ type
     tyNoType = "<none>",
     # weird concrete
     tyInstance = "<instance>",
-    tyTuple = "Tuple", # XXX (tuple type) make into tyComposite, tuple, named tuple, array (i.e. int^20) all at once
+    tyTuple = "Tuple", # XXX [tuple] make into tyComposite, tuple, named tuple, array (i.e. int^20) all at once
     # concrete
     tyNoneValue = "NoneValue",
     tyInt32 = "Int32", tyUint32 = "Uint32", tyFloat32 = "Float32", tyBool = "Bool",
@@ -94,7 +94,7 @@ type
     tyParameter = "Parameter",
     # value container
     tyValue = "Value"
-      # XXX (types) maybe only makes sense in type arg context and could go in separate TypeArg type?
+      # XXX [types] maybe only makes sense in type arg context and could go in separate TypeArg type?
 
 const unboxedValueKinds* = {vNone..pred(vBoxed)}
 const
@@ -102,7 +102,7 @@ const
   concreteTypeKinds* = {tyTuple, #[tyInstance,]# tyNoneValue..tyType}
   typeclassTypeKinds* = {tyAny..tySomeValue}
   nativeTypes* = {tyNoneValue..tyType, tyTupleConstructor}
-    # XXX (types) to consider later: tuple, any all, union intersection not, somevalue
+    # XXX [types] to consider later: tuple, any all, union intersection not, somevalue
     # typeclasses look a little annoying with normalization
   noArgNativeTypes* = {tyNoneValue..tyFloat64, tyString, tyExpression, tyStatement, tyContext, tyModule}
   argNativeTypes* = nativeTypes - noArgNativeTypes
@@ -133,10 +133,10 @@ type
     of vEffect:
       effectValue*: Box[Value]
     of vReference:
-      # XXX (references) figure out how to optimize this for mutable collections
+      # XXX [memory, references] figure out how to optimize this for mutable collections - probably wont and just have the collections act like references
       referenceValue*: Reference[Value]
     of vArray:
-      # XXX (byte layout, references) maybe match pointer field location with vList, vString
+      # XXX [memory, references] maybe match pointer field location with vList, vString
       arrayValue*: RefArray[Value]
     of vBoxed:
       boxedValue*: BoxedValue[Value]
@@ -149,23 +149,23 @@ type
     of vType:
       typeValue*: BoxedValue[Type]
     of vString:
-      # XXX (byte layout, references) maybe match pointer field location with vArray, vList
+      # XXX [memory, references] maybe match pointer field location with vArray, vList
       stringValue*: BoxedValue[string]
     of vList:
-      # XXX (byte layout, references) maybe match pointer field location with vArray, vString
+      # XXX [memory, references] maybe match pointer field location with vArray, vString
       listValue*: BoxedValue[seq[Value]]
     of vSet:
       setValue*: BoxedValue[HashSet[Value]]
     of vTable:
       tableValue*: BoxedValue[Table[Value, Value]]
     of vFunction:
-      # XXX merge into Function object
+      # XXX [function] merge into Function object
       functionValue*: BoxedValue[TreeWalkProgram]
     of vLinearFunction:
-      # XXX merge into Function object
+      # XXX [function] merge into Function object
       linearFunctionValue*: BoxedValue[LinearProgram]
     of vNativeFunction:
-      # XXX merge into Function object
+      # XXX [function] merge into Function object
       nativeFunctionValue*: proc (args: openarray[Value]): Value {.nimcall.}
     of vExpression:
       expressionValue*: Expression
@@ -211,7 +211,7 @@ type
     table*: Table[TypeParameter, Type]
 
   TypeBase* = ref object
-    # XXX (types) check arguments at generic fill time
+    # XXX [types] check arguments at generic fill time
     id*: TypeBaseId
     name*: string
     nativeType*: NativeType
@@ -230,9 +230,9 @@ type
     rest*: Properties
 
   Type* = object
-    # XXX (types) 90 bytes - change these tables out for something smaller
+    # XXX [types] 90 bytes - change these tables out for something smaller
     properties*: Table[TypeBase, Type]
-      # XXX (types) redo these
+      # XXX [types] redo these
       # can be a multitable later on
     case kind*: TypeKind
     of tyNoType: discard
@@ -242,10 +242,10 @@ type
     of tyTuple:
       elements*: seq[Type]
       varargs*: Box[Type] # for now only trailing
-        # XXX (tuple type) either move to property, or allow non-trailing
-        # XXX (tuple type) definite length varargs? i.e. array[3, int]
+        # XXX [tuple] either move to property, or allow non-trailing
+        # XXX [tuple] definite length varargs? i.e. array[3, int]
       elementNames*: Table[string, int]
-      # XXX (tuple type) also Defaults purely for initialization/conversion?
+      # XXX [tuple] also Defaults purely for initialization/conversion?
       # meaning only considered in function type relation
     of noArgNativeTypes: discard
     of argNativeTypes:
@@ -283,7 +283,7 @@ type
   LinearProgram* = object
     registerCount*: int
     argPositions*: Array[int] ## last is result
-    constants*: Array[Value] # XXX (serialization) serialize values
+    constants*: Array[Value] # XXX [serialization] serialize values
     jumpLocations*: Array[int]
     instructions*: seq[byte]
 
@@ -380,7 +380,7 @@ type
 
   StatementObj* = object
     ## typed/compiled expression
-    # XXX (macros) differentiate between validated and unvalidated,
+    # XXX [macros] differentiate between validated and unvalidated,
     # maybe allow things like skFromExpression for metas
     knownType*: Type
     case kind*: StatementKind
@@ -391,7 +391,7 @@ type
       callee*: Statement
       arguments*: seq[Statement]
     of skDispatch:
-      # XXX (dispatch) generalize dispatch result
+      # XXX [dispatch] generalize dispatch result
       dispatchees*: seq[(seq[Type], Statement)]
       dispatchArguments*: seq[Statement]
     of skSequence:
@@ -444,7 +444,7 @@ type
     stackIndex*: int
     scope* {.cursor.}: Scope
     genericParams*: seq[TypeParameter]
-      # XXX (types) maybe make this a tuple type too with signature for named and default generic params
+      # XXX [types] maybe make this a tuple type too with signature for named and default generic params
     lazyExpression*: Expression
     evaluated*: bool
 

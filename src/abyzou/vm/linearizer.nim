@@ -1,7 +1,7 @@
 import ./[primitives, arrays, valueconstr, typebasics], std/tables
 
-# XXX (bytecode) do some kind of register last use analysis to merge some registers
-# XXX (serialization) constant pool can be long string of serialized values,
+# XXX [bytecode] do some kind of register last use analysis to merge some registers
+# XXX [serialization] constant pool can be long string of serialized values,
 # then they are deserialized and cached into registers when loaded
 
 type
@@ -332,7 +332,7 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
         (coll: args, ind: i.int32, val: value(a))))
     let tReg = fn.newRegister()
     for t, d in s.dispatchees.items:
-      # XXX (type matching) make sure this type arming works
+      # XXX [typematch] make sure this type arming works
       let ty = funcType(AnyTy, t)
       fn.add(Instr(kind: LoadConstant, lc:
         (res: tReg, constant: fn.getConstant(toValue(ty)))))
@@ -392,7 +392,7 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
     fn.jumpPoint(falseLoc)
     linearize(module, fn, branchRes, s.ifFalse)
     fn.jumpPoint(endLoc)
-    # XXX (bytecode) maybe later optimize consecutive jump points to 1 jump point
+    # XXX [bytecode] maybe later optimize consecutive jump points to 1 jump point
     # like if s.ifFalse is a skNone statement
   of skWhile:
     let startLoc = fn.newJumpLocation()
@@ -419,7 +419,7 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
     linearize(module, fn, result, s.effectBody)
     fn.add(Instr(kind: PopEffectHandler))
   of skTuple:
-    # XXX (bytecode) statement shouldn't build collection
+    # XXX [bytecode] statement shouldn't build collection
     let res = resultRegister(fn, result)
     fn.add(Instr(kind: InitTuple, coll:
       (res: res, siz: s.elements.len.int32)))
@@ -427,31 +427,31 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
       fn.add(Instr(kind: SetConstIndex, sci:
         (coll: res, ind: i.int32, val: value(a))))
   of skList:
-    # XXX (bytecode) statement shouldn't build collection
+    # XXX [bytecode] statement shouldn't build collection
     let res = resultRegister(fn, result)
     fn.add(Instr(kind: InitList, coll:
       (res: res, siz: s.elements.len.int32)))
     for i, a in s.elements:
-      # XXX (byte layout, references) SetIndex for lists and strings should only work if their pointer is
+      # XXX [memory, references] SetIndex for lists and strings should only work if their pointer is
       # in the same location in memory as arrays
       fn.add(Instr(kind: SetConstIndex, sci:
         (coll: res, ind: i.int32, val: value(a))))
   of skSet:
-    # XXX (bytecode) statement shouldn't build collection
+    # XXX [bytecode] statement shouldn't build collection
     let res = resultRegister(fn, result)
     fn.add(Instr(kind: InitSet, coll:
       (res: res, siz: s.elements.len.int32)))
     for a in s.elements:
-      # XXX (byte layout, references) no SetIndex for sets
+      # XXX [memory, references] no SetIndex for sets
       fn.add(Instr(kind: SetIndex, sri:
         (coll: res, ind: value(a), val: value(a))))
   of skTable:
-    # XXX (bytecode) statement shouldn't build collection
+    # XXX [bytecode] statement shouldn't build collection
     let res = resultRegister(fn, result)
     fn.add(Instr(kind: InitTable, coll:
       (res: res, siz: s.elements.len.int32)))
     for k, v in s.entries.items:
-      # XXX (byte layout, references) probably no SetIndex for tables
+      # XXX [memory, references] probably no SetIndex for tables
       fn.add(Instr(kind: SetIndex, sri:
         (coll: res, ind: value(k), val: value(v))))
   of skGetIndex:

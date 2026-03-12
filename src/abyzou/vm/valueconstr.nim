@@ -95,7 +95,7 @@ proc makeTyped*(x: var Value, t: Type) =
     setTypeIfBoxed(x, t)
 
 when false:
-  # XXX (serialization) this is probably important
+  # XXX [serialization] this is probably important
   proc copy*(value: Value): Value =
     case value.kind
     of vNone, vInt64, vBool, vUint64, vFloat64,

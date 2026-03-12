@@ -19,4 +19,6 @@ id(TypeParameter)
 id(Variable)
 id(Module)
 
-# XXX maybe intern identifiers or strings?
+# XXX maybe intern identifiers or strings? - registry idea:
+# StringRegistry library type, `id "abc"` returns a StringId mapped to "abc", then stringifying it looks up the id from the string registry and gives back "abc"
+# could also make registries a generic thing and allow users to define their own, i guess as a sort of enum 
