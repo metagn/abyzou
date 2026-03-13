@@ -1,7 +1,7 @@
 import std/[algorithm, hashes, tables],
   ../lang/[expressions],
   ../repr/[primitives, ids, typebasics],
-  ./[typematch, treewalk, compilation]
+  ./[typematch, treewalk]
 
 proc newVariable*(name: string, knownType: Type = NoType): Variable =
   Variable(id: newVariableId(), name: name, nameHash: name.hash, knownType: knownType)
@@ -48,15 +48,9 @@ proc define*(scope: Scope, variable: Variable, kind = Local) =
   scope.module.addStackSlot(kind, variable)
   scope.variables.add(variable)
 
-proc evaluateStatic*(scope: Scope, ex: Expression, bound: TypeBound = +AnyTy): Value =
-  scope.module.evaluateStatic(scope.compile(ex, bound))
+proc evaluateStatic*(scope: Scope, ex: Expression, bound: TypeBound = +AnyTy): Value
 
-proc setStatic*(variable: Variable, expression: Expression) =
-  let value = variable.scope.compile(expression, +variable.knownType)
-  variable.knownType = value.knownType
-  let val = variable.scope.module.stack.evaluate(value)
-  variable.scope.module.stack.set(variable.stackIndex, val)
-  variable.evaluated = true
+proc setStatic*(variable: Variable, expression: Expression)
 
 proc getType*(variable: Variable): Type =
   if variable.knownType.isNoType and not variable.lazyExpression.isNil and not variable.evaluated:
@@ -74,37 +68,6 @@ proc capture*(c: Module, v: Variable): int =
       discard c.origin.module.capture(v)
     result = c.captures.mgetOrPut(v, c.stackSlots.len)
     c.addStackSlot(StaticCapture, v, v.scope.module.get(v))
-
-proc variableGet*(c: Module, r: VariableReference): Statement =
-  let t = r.type
-  case r.kind
-  of Constant:
-    result = Statement(kind: skConstant,
-      constant: r.variable.scope.module.get(r.variable),
-      knownType: t)
-  of Local, Argument:
-    result = Statement(kind: skVariableGet,
-      variableGetIndex: r.variable.stackIndex,
-      knownType: t)
-  of StaticCapture:
-    result = Statement(kind: skVariableGet,
-      variableGetIndex: c.capture(r.variable),
-      knownType: t)
-
-proc variableSet*(c: Module, r: VariableReference, value: Statement, source: Expression = nil): Statement =
-  let t = r.type
-  case r.kind
-  of Local, Argument:
-    result = Statement(kind: skVariableSet,
-      variableSetIndex: r.variable.stackIndex,
-      variableSetValue: value,
-      knownType: t)
-  of Constant, StaticCapture:
-    raise (ref OutOfScopeModifyError)(expression: source,
-      variable: r.variable, referenceKind: r.kind,
-      msg: "cannot modify " &
-        (if r.kind == StaticCapture: "captured " else: "constant ") &
-        r.variable.name & ", use a reference instead")
 
 proc symbols*(scope: Scope, name: string, bound: TypeBound,
   nameHash = name.hash): seq[VariableReference] =
@@ -140,6 +103,10 @@ proc symbols*(scope: Scope, name: string, bound: TypeBound,
       if bound.matchBound(t):
         result.add(v.shallowReference(t))
 
+proc variableGet*(c: Module, r: VariableReference): Statement
+
+proc variableSet*(c: Module, r: VariableReference, value: Statement, source: Expression = nil): Statement
+
 proc overloads*(scope: Scope, name: string, bound: TypeBound): seq[VariableReference] =
   result = symbols(scope, name, bound)
   # sort must be stable to preserve definition/import order
@@ -148,6 +115,51 @@ proc overloads*(scope: Scope, name: string, bound: TypeBound): seq[VariableRefer
       compare(a.type, b.type),
     order = if bound.variance == Covariant: Ascending else: Descending)
   result.reverse()
+
+proc resolve*(scope: Scope, ex: Expression, name: string, bound: TypeBound): VariableReference
+
+import ./compilation
+
+proc evaluateStatic*(scope: Scope, ex: Expression, bound: TypeBound = +AnyTy): Value =
+  scope.module.evaluateStatic(scope.compile(ex, bound))
+
+proc setStatic*(variable: Variable, expression: Expression) =
+  let value = variable.scope.compile(expression, +variable.knownType)
+  variable.knownType = value.knownType
+  let val = variable.scope.module.stack.evaluate(value)
+  variable.scope.module.stack.set(variable.stackIndex, val)
+  variable.evaluated = true
+
+proc variableGet*(c: Module, r: VariableReference): Statement =
+  let t = r.type
+  case r.kind
+  of Constant:
+    result = Statement(kind: skConstant,
+      constant: r.variable.scope.module.get(r.variable),
+      knownType: t)
+  of Local, Argument:
+    result = Statement(kind: skVariableGet,
+      variableGetIndex: r.variable.stackIndex,
+      knownType: t)
+  of StaticCapture:
+    result = Statement(kind: skVariableGet,
+      variableGetIndex: c.capture(r.variable),
+      knownType: t)
+
+proc variableSet*(c: Module, r: VariableReference, value: Statement, source: Expression = nil): Statement =
+  let t = r.type
+  case r.kind
+  of Local, Argument:
+    result = Statement(kind: skVariableSet,
+      variableSetIndex: r.variable.stackIndex,
+      variableSetValue: value,
+      knownType: t)
+  of Constant, StaticCapture:
+    raise (ref OutOfScopeModifyError)(expression: source,
+      variable: r.variable, referenceKind: r.kind,
+      msg: "cannot modify " &
+        (if r.kind == StaticCapture: "captured " else: "constant ") &
+        r.variable.name & ", use a reference instead")
 
 proc resolve*(scope: Scope, ex: Expression, name: string, bound: TypeBound): VariableReference =
   let overloads = overloads(scope, name, bound)

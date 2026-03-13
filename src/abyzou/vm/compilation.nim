@@ -27,12 +27,6 @@ type
 
 proc compile*(scope: Scope, ex: Expression, bound: TypeBound): Statement
 
-import ./modules
-export modules
-
-defineTypeBase Meta, TypeBase(name: "Meta",
-  arguments: @[newTypeParameter("", +baseType(FunctionTy))])
-
 template constant*(value: Value, ty: Type): Statement =
   Statement(kind: skConstant, constant: value, knownType: ty)
 template constant*(value: untyped, ty: Type): Statement =
@@ -41,6 +35,12 @@ template constant*(value: string): Statement = constant(value, StringTy)
 template constant*(value: int32): Statement = constant(value, Int32Ty)
 template constant*(value: uint32): Statement = constant(value, Uint32Ty)
 template constant*(value: float32): Statement = constant(value, Float32Ty)
+
+import ./modules
+export modules
+
+defineTypeBase Meta, TypeBase(name: "Meta",
+  arguments: @[newTypeParameter("", +baseType(FunctionTy))])
 
 proc isNative(bound: TypeBound, nt: NativeType): bool {.inline.} =
   # XXX no native type normalization here
