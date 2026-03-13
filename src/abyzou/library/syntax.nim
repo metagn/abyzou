@@ -51,9 +51,10 @@ module syntax:
         program: lc.toFunction(),
         type: fnType))
     else:
+      let body2 = [body][0]#copy(body) # weird orc bug workaround
       let tw = TreeWalkProgram(
         stack: bodyScope.module.makeStack(),
-        instruction: body)
+        instruction: body2)
       fun = toValue(TreeWalkFunction(
         program: tw,
         type: fnType))
