@@ -26,9 +26,9 @@ template toNegatedBool*(val: Value): bool =
 template toBool*(val: Value): bool =
   val.boolValue
 
-proc evaluate*(ins: Instruction, stack: Stack, effectHandler: EffectHandler = nil): Value
+proc evaluate*(ins: Statement, stack: Stack, effectHandler: EffectHandler = nil): Value
 
-template runCheckEffect(instr: Instruction, stack, effectHandler): Value =
+template runCheckEffect(instr: Statement, stack, effectHandler): Value =
   let val = evaluate(instr, stack, effectHandler)
   if val.kind == vEffect and (effectHandler.isNil or not effectHandler(val.effectValue.unref)):
     return val
@@ -52,27 +52,27 @@ proc call*(fun: Value, args: sink Array[Value], effectHandler: EffectHandler = n
     result = fun.linearFunctionValue.program.call(args.toOpenArray(0, args.len - 1))
   else: raiseAssert("cannot call " & $fun)
 
-proc evaluate*(ins: Instruction, stack: Stack, effectHandler: EffectHandler = nil): Value =
+proc evaluate*(ins: Statement, stack: Stack, effectHandler: EffectHandler = nil): Value =
   template run(instr; stack = stack; effectHandler = effectHandler): untyped =
     runCheckEffect(instr, stack, effectHandler)
   let ins = ins[]
   case ins.kind
-  of NoOp:
+  of skNone:
     result = Value(kind: vNone)
-  of Constant:
-    result = ins.constantValue
-  of FunctionCall:
-    let fn = unboxStripType run ins.function
+  of skConstant:
+    result = ins.constant
+  of skFunctionCall:
+    let fn = unboxStripType run ins.callee
     var args = initArray[Value](ins.arguments.len)
     for i in 0 ..< args.len:
       args[i] = run ins.arguments[i]
     result = fn.call(args, effectHandler)
-  of Dispatch:
+  of skDispatch:
     var args = initArray[Value](ins.dispatchArguments.len)
     for i in 0 ..< args.len:
       args[i] = run ins.dispatchArguments[i]
     block dispatch:
-      for ts, fnInstr in ins.dispatchFunctions.items:
+      for ts, fnInstr in ins.dispatchees.items:
         block accepted:
           for i in 0 ..< args.len:
             if not args[i].checkType(ts[i]):
@@ -80,21 +80,15 @@ proc evaluate*(ins: Instruction, stack: Stack, effectHandler: EffectHandler = ni
           let fn = unboxStripType run fnInstr
           result = fn.call(args, effectHandler)
           break dispatch
-  of CheckType:
-    let val = run ins.binary1
-    let tVal = run ins.binary2
-    assert tVal.kind == vType
-    let t = tVal.typeValue.type.unwrapTypeType
-    result = toValue val.checkType(t)
-  of Sequence:
+  of skSequence:
     for instr in ins.sequence:
       result = run instr
-  of VariableGet:
+  of skVariableGet:
     result = stack.get(ins.variableGetIndex)
-  of VariableSet:
+  of skVariableSet:
     result = run ins.variableSetValue
     stack.set(ins.variableSetIndex, result)
-  of ArmStack:
+  of skArmStack:
     result = stack.get(ins.armStackFunctionVariable)
     # XXX [function-arm] missing impl for linear function?
     let oldFn = result.functionValue
@@ -104,25 +98,25 @@ proc evaluate*(ins: Instruction, stack: Stack, effectHandler: EffectHandler = ni
     stack.set(ins.armStackFunctionVariable, result)
     for a, b in ins.armStackCaptures.items:
       newFn.program.stack.set(a, stack.get(b))
-  of If:
-    let cond = run ins.ifCondition
+  of skIf:
+    let cond = run ins.ifCond
     if cond.toBool:
       result = run ins.ifTrue
     else:
       result = run ins.ifFalse
-  of While:
-    while (let cond = run ins.whileCondition; cond.toBool):
-      result = run ins.whileTrue
-  of DoUntil:
+  of skWhile:
+    while (let cond = run ins.whileCond; cond.toBool):
+      result = run ins.whileBody
+  of skDoUntil:
     while true:
-      result = run ins.doUntilTrue
-      let cond = run ins.doUntilCondition
+      result = run ins.doUntilBody
+      let cond = run ins.doUntilCond
       if cond.toBool:
         break
-  of EmitEffect:
+  of skEmitEffect:
     result = Value(kind: vEffect)
     result.effectValue.store(run ins.effect)
-  of HandleEffect:
+  of skHandleEffect:
     let h = unboxStripType run ins.effectHandler
     var handler: proc (effect: Value): bool
     case h.kind
@@ -145,8 +139,8 @@ proc evaluate*(ins: Instruction, stack: Stack, effectHandler: EffectHandler = ni
           return false
         val.toBool
     else: raiseAssert("cannot make " & $h & " into effect handler")
-    result = run(ins.effectEmitter, stack, handler)
-  of BuildTuple:
+    result = run(ins.effectBody, stack, handler)
+  of skTuple:
     if ins.elements.len <= 255:
       var arr = initArray[Value](ins.elements.len)
       for i in 0 ..< arr.len:
@@ -157,22 +151,22 @@ proc evaluate*(ins: Instruction, stack: Stack, effectHandler: EffectHandler = ni
       for i in 0 ..< arr.len:
         arr[i] = run ins.elements[i]
       result = toValue(arr)
-  of BuildList:
+  of skList:
     var arr = newSeq[Value](ins.elements.len)
     for i in 0 ..< arr.len:
       arr[i] = run ins.elements[i]
     result = toValue(arr)
-  of BuildSet:
+  of skSet:
     var arr = initHashSet[Value](ins.elements.len)
     for e in ins.elements:
       arr.incl(run e)
     result = toValue(arr)
-  of BuildTable:
+  of skTable:
     var arr = initTable[Value, Value](ins.entries.len)
     for k, v in ins.entries.items:
       arr[run k] = run v
     result = toValue(arr)
-  of GetIndex:
+  of skGetIndex:
     let x = run ins.getIndexAddress
     case x.kind
     of vList:
@@ -182,7 +176,7 @@ proc evaluate*(ins: Instruction, stack: Stack, effectHandler: EffectHandler = ni
     of vString:
       result = toValue(x.stringValue.value.unref[ins.getIndex].int)
     else: discard # error
-  of SetIndex:
+  of skSetIndex:
     let x = run ins.setIndexAddress
     result = run ins.setIndexValue
     case x.kind
@@ -194,41 +188,51 @@ proc evaluate*(ins: Instruction, stack: Stack, effectHandler: EffectHandler = ni
       assert result.kind == vInt32 and result.int32Value >= 0 and result.int32Value <= 255
       x.stringValue.value.unref[ins.setIndex] = result.int32Value.char
     else: discard # error
-  of AddInt:
-    let a = unboxStripType run ins.binary1
-    let b = unboxStripType run ins.binary2
-    result = toValue(a.int32Value + b.int32Value)
-  of SubInt:
-    let a = unboxStripType run ins.binary1
-    let b = unboxStripType run ins.binary2
-    result = toValue(a.int32Value - b.int32Value)
-  of MulInt:
-    let a = unboxStripType run ins.binary1
-    let b = unboxStripType run ins.binary2
-    result = toValue(a.int32Value * b.int32Value)
-  of DivInt:
-    let a = unboxStripType run ins.binary1
-    let b = unboxStripType run ins.binary2
-    result = toValue(a.int32Value div b.int32Value)
-  of AddFloat:
-    let a = unboxStripType run ins.binary1
-    let b = unboxStripType run ins.binary2
-    result = toValue(a.float32Value + b.float32Value)
-  of SubFloat:
-    let a = unboxStripType run ins.binary1
-    let b = unboxStripType run ins.binary2
-    result = toValue(a.float32Value - b.float32Value)
-  of MulFloat:
-    let a = unboxStripType run ins.binary1
-    let b = unboxStripType run ins.binary2
-    result = toValue(a.float32Value * b.float32Value)
-  of DivFloat:
-    let a = unboxStripType run ins.binary1
-    let b = unboxStripType run ins.binary2
-    result = toValue(a.float32Value / b.float32Value)
-  of NegInt:
-    let a = unboxStripType run ins.unary
-    result = toValue(-a.int32Value)
-  of NegFloat:
-    let a = unboxStripType run ins.unary
-    result = toValue(-a.float32Value)
+  of skBinaryInstruction:
+    case ins.binaryInstructionKind
+    of AddInt:
+      let a = unboxStripType run ins.binary1
+      let b = unboxStripType run ins.binary2
+      result = toValue(a.int32Value + b.int32Value)
+    of SubInt:
+      let a = unboxStripType run ins.binary1
+      let b = unboxStripType run ins.binary2
+      result = toValue(a.int32Value - b.int32Value)
+    of MulInt:
+      let a = unboxStripType run ins.binary1
+      let b = unboxStripType run ins.binary2
+      result = toValue(a.int32Value * b.int32Value)
+    of DivInt:
+      let a = unboxStripType run ins.binary1
+      let b = unboxStripType run ins.binary2
+      result = toValue(a.int32Value div b.int32Value)
+    of AddFloat:
+      let a = unboxStripType run ins.binary1
+      let b = unboxStripType run ins.binary2
+      result = toValue(a.float32Value + b.float32Value)
+    of SubFloat:
+      let a = unboxStripType run ins.binary1
+      let b = unboxStripType run ins.binary2
+      result = toValue(a.float32Value - b.float32Value)
+    of MulFloat:
+      let a = unboxStripType run ins.binary1
+      let b = unboxStripType run ins.binary2
+      result = toValue(a.float32Value * b.float32Value)
+    of DivFloat:
+      let a = unboxStripType run ins.binary1
+      let b = unboxStripType run ins.binary2
+      result = toValue(a.float32Value / b.float32Value)
+    of CheckType:
+      let val = run ins.binary1
+      let tVal = run ins.binary2
+      assert tVal.kind == vType
+      let t = tVal.typeValue.type.unwrapTypeType
+      result = toValue val.checkType(t)
+  of skUnaryInstruction:
+    case ins.unaryInstructionKind
+    of NegInt:
+      let a = unboxStripType run ins.unary
+      result = toValue(-a.int32Value)
+    of NegFloat:
+      let a = unboxStripType run ins.unary
+      result = toValue(-a.float32Value)

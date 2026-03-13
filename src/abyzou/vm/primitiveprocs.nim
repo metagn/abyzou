@@ -25,7 +25,6 @@ idObject(Module)
 proc hash*(v: BoxedValueObj): Hash {.noSideEffect.}
 proc hash*(v: Value): Hash {.noSideEffect.}
 proc hash*(v: Type): Hash {.noSideEffect.}
-proc hash*(v: InstructionObj): Hash {.noSideEffect.}
 
 template hashRefObj(T): untyped {.dirty.} =
   proc hash*(v: T): Hash {.noSideEffect.} =
@@ -38,7 +37,6 @@ template hashRefObj(T): untyped {.dirty.} =
 hashRefObj BoxedValue
 hashRefObj(ref Value)
 hashRefObj(ref Type)
-hashRefObj Instruction
 hashRefObj Stack
 
 template hashObj(T): untyped {.dirty.} =
@@ -59,19 +57,16 @@ template hashObj(T): untyped {.dirty.} =
 hashObj BoxedValueObj
 hashObj Value
 hashObj Type
-hashObj InstructionObj
 
 proc `==`*[T](a, b: BoxedValueObj[T]): bool {.noSideEffect.}
 proc `==`*(a, b: Value): bool {.noSideEffect.}
 proc `==`*(a, b: Type): bool {.noSideEffect.}
-proc `==`*(a, b: InstructionObj): bool {.noSideEffect.}
 proc `==`*(a, b: StatementObj): bool {.noSideEffect.}
 
 equals *(ref Value)
 proc `==`*[T](a, b: BoxedValue[T]): bool {.noSideEffect.} =
   system.`==`(a, b) or (not a.isNil and not b.isNil and a[] == b[])
 equals *(ref Type)
-equals *(ref InstructionObj)
 equals *(ref StatementObj)
 
 equals *Value
@@ -79,7 +74,6 @@ proc `==`*[T](a, b: BoxedValueObj[T]): bool {.noSideEffect.} =
   a.type == b.type and (when compiles(a.value): a.value == b.value else: true)
 equals *Type
 equals *TypeMatch
-equals *InstructionObj
 equals *StatementObj
 
 import strutils
