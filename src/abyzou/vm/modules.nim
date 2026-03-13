@@ -7,6 +7,7 @@ proc newVariable*(name: string, knownType: Type = NoType): Variable =
   Variable(id: newVariableId(), name: name, nameHash: name.hash, knownType: knownType)
 
 proc newModule*(parent: Scope = nil, imports: seq[Scope] = @[]): Module =
+  # XXX [modules] use module registry
   result = Module(id: newModuleId(), origin: parent)
   result.top = Scope(module: result, imports: imports)
 

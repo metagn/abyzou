@@ -37,7 +37,7 @@ type
     vReference
       ## reference value, can be mutable
       ## only value kind with reference semantics
-      # XXX [modules, references] ^ make this wrong with module idea, this can stay otherwise though
+      # XXX [modules, memory] ^ make this wrong with proper closures, this can stay otherwise though
     vArray
       ## like java array but typed like TS, implementation of tuples
     vFunction
@@ -50,7 +50,7 @@ type
     vExpression
     vStatement
     vModule
-      # XXX [modules, references] implement accessing modules and module variables
+      # XXX [modules, memory] implement accessing modules and module variables
     vBoxed
       ## boxed version of unboxed values, used for type info
     vInt64, vUint64, vFloat64
@@ -140,10 +140,10 @@ type
     of vEffect:
       effectValue*: Box[Value]
     of vReference:
-      # XXX [memory, references] figure out how to optimize this for mutable collections - probably wont and just have the collections act like references
+      # XXX [memory] figure out how to optimize this for mutable collections - probably wont and just have the collections act like references
       referenceValue*: Reference[Value]
     of vArray:
-      # XXX [memory, references] maybe match pointer field location with vList, vString
+      # XXX [memory] maybe match pointer field location with vList, vString
       arrayValue*: RefArray[Value]
     of vBoxed:
       boxedValue*: BoxedValue[Value]
@@ -156,10 +156,10 @@ type
     of vType:
       typeValue*: BoxedValue[Type]
     of vString:
-      # XXX [memory, references] maybe match pointer field location with vArray, vList
+      # XXX [memory] maybe match pointer field location with vArray, vList
       stringValue*: BoxedValue[string]
     of vList:
-      # XXX [memory, references] maybe match pointer field location with vArray, vString
+      # XXX [memory] maybe match pointer field location with vArray, vString
       listValue*: BoxedValue[seq[Value]]
     of vSet:
       setValue*: BoxedValue[HashSet[Value]]
@@ -316,6 +316,7 @@ type
     # value first just to copy BoxedValue
     program*: LinearProgram
     `type`*: Type
+
   BinaryInstructionKind* = enum
     AddInt, SubInt, MulInt, DivInt
     AddFloat, SubFloat, MulFloat, DivFloat
@@ -331,6 +332,7 @@ type
     skSequence
     # stack
     skVariableGet, skVariableSet
+    skAddressGet, skAddressSet
     skArmStack
     # goto
     skIf, skWhile, skDoUntil
@@ -365,6 +367,13 @@ type
     of skVariableSet:
       variableSetIndex*: int
       variableSetValue*: Statement
+    of skAddressGet:
+      addressGetModule*: Statement
+      addressGetIndex*: int
+    of skAddressSet:
+      addressSetModule*: Statement
+      addressSetIndex*: int
+      addressSetValue*: Statement
     of skArmStack:
       armStackFunctionVariable*: int
       armStackCaptures*: seq[tuple[index, valueIndex: int]]

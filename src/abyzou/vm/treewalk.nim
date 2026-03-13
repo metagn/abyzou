@@ -82,6 +82,15 @@ proc evaluate*(stack: var ModuleStack, ins: Statement, effectHandler: EffectHand
   of skVariableSet:
     result = run ins.variableSetValue
     stack.set(ins.variableSetIndex, result)
+  of skAddressGet:
+    let m = unboxStripType run ins.addressGetModule
+    assert m.kind == vModule
+    result = m.moduleValue.stack.get(ins.addressGetIndex)
+  of skAddressSet:
+    let m = unboxStripType run ins.addressSetModule
+    assert m.kind == vModule
+    result = run ins.addressSetValue
+    m.moduleValue.stack.set(ins.addressSetIndex, result)
   of skArmStack:
     result = stack.get(ins.armStackFunctionVariable)
     # XXX [function-arm] missing impl for linear function?
