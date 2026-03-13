@@ -3,15 +3,8 @@ import
   ../repr/[primitives, arrays, valueconstr, typebasics],
   ./checktype
 
-proc get*(stack: Stack, index: int): lent Value {.inline.} =
-  stack.stack[index]
-proc set*(stack: Stack, index: int, value: sink Value) {.inline.} =
-  stack.stack[index] = value
-
-proc shallowRefresh*(stack: Stack): Stack {.inline.} =
-  result = Stack(stack: initArray[Value](stack.stack.len))
-  for i in 0 ..< stack.stack.len:
-    result.stack[i] = stack.stack[i]
+proc shallowRefresh*(stack: ModuleStack): ModuleStack {.inline.} =
+  result = stack
 
 proc shallowRefresh*(fun: TreeWalkFunction): TreeWalkFunction {.inline.} =
   new(result)
@@ -27,7 +20,7 @@ template toNegatedBool*(val: Value): bool =
 template toBool*(val: Value): bool =
   val.boolValue
 
-proc evaluate*(ins: Statement, stack: Stack, effectHandler: EffectHandler = nil): Value
+proc evaluate*(ins: Statement, stack: var ModuleStack, effectHandler: EffectHandler = nil): Value
 
 template runCheckEffect(instr: Statement, stack, effectHandler): Value =
   let val = evaluate(instr, stack, effectHandler)
@@ -53,7 +46,7 @@ proc call*(fun: Value, args: sink Array[Value], effectHandler: EffectHandler = n
     result = fun.linearFunctionValue.program.call(args.toOpenArray(0, args.len - 1))
   else: raiseAssert("cannot call " & $fun)
 
-proc evaluate*(ins: Statement, stack: Stack, effectHandler: EffectHandler = nil): Value =
+proc evaluate*(ins: Statement, stack: var ModuleStack, effectHandler: EffectHandler = nil): Value =
   template run(instr; stack = stack; effectHandler = effectHandler): untyped =
     runCheckEffect(instr, stack, effectHandler)
   let ins = ins[]

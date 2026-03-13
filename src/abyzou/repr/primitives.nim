@@ -276,8 +276,8 @@ type
     boundType*: Type
     variance*: Variance
 
-  Stack* = ref object
-    stack*: Array[Value]
+  ModuleStack* = object
+    stack*: seq[Value]
 
   NativeFunction* = #[ref ]#object
     # value first just to copy BoxedValue
@@ -285,7 +285,7 @@ type
     #`type`*: Type
 
   TreeWalkProgram* = object
-    stack*: Stack
+    stack*: ModuleStack
       ## persistent stack
       ## gets shallow copied when function is run
     instruction*: Statement
@@ -408,7 +408,6 @@ type
   StackSlot* = object
     kind*: VariableReferenceKind
     variable*: Variable
-    value*: Value
 
   Module* = ref object
     ## current module or function
@@ -420,7 +419,8 @@ type
     captures*: Table[Variable, int]
     top*: Scope
     stackSlots*: seq[StackSlot] ## should not shrink
-  
+    stack*: ModuleStack
+
   Scope* = ref object
     ## restricted subset of variables in a context
     parent*: Scope
@@ -456,6 +456,13 @@ template tupleValue*(v: Value): untyped =
 
 # for now clashes with `module` macro for libraries
 #proc module*(c: Context): Module {.inline.} = c.scope.module
+
+proc get*(stack: ModuleStack, index: int): lent Value {.inline.} =
+  stack.stack[index]
+proc getMut*(stack: var ModuleStack, index: int): var Value {.inline.} =
+  stack.stack[index]
+proc set*(stack: var ModuleStack, index: int, value: sink Value) {.inline.} =
+  stack.stack[index] = value
 
 import ./primitiveprocs
 export primitiveprocs

@@ -1,6 +1,6 @@
 import std/[algorithm, hashes, tables],
   ../lang/[expressions],
-  ../repr/[primitives, ids, typebasics, arrays],
+  ../repr/[primitives, ids, typebasics],
   ./[typematch, treewalk, compilation]
 
 proc newVariable*(name: string, knownType: Type = NoType): Variable =
@@ -16,34 +16,36 @@ proc childModule*(scope: Scope): Module =
 proc childScope*(scope: Scope): Scope =
   result = Scope(parent: scope, module: scope.module)
 
-proc makeStack*(module: Module): Stack =
-  result = Stack(stack: initArray[Value](module.stackSlots.len))
-  for i in 0 ..< module.stackSlots.len:
-    result.stack[i] = module.stackSlots[i].value
+proc get*(module: Module, variable: Variable): Value {.inline.} =
+  assert variable.scope.module == module
+  module.stack.get(variable.stackIndex)
 
-proc fillStack(module: Module, stack: Stack) =
-  for i in 0 ..< stack.stack.len:
-    module.stackSlots[i].value = stack.stack[i]
+proc getMut*(module: Module, variable: Variable): var Value {.inline.} =
+  assert variable.scope.module == module
+  module.stack.getMut(variable.stackIndex)
 
-template withStack*(module: Module, body) =
-  let stack {.inject.} = makeStack(module)
-  body
-  fillStack(module, stack)
+proc set*(module: Module, variable: Variable, value: sink Value) {.inline.} =
+  assert variable.scope.module == module
+  module.stack.set(variable.stackIndex, value)
 
 proc evaluateStatic*(module: Module, st: Statement): Value =
-  module.withStack:
-    result = st.evaluate(stack)
+  result = st.evaluate(module.stack)
+
+proc addStackSlot*(module: Module, kind: VariableReferenceKind, v: Variable) =
+  module.stackSlots.add(StackSlot(kind: kind, variable: v))
+  if module.stack.stack.len < module.stackSlots.len:
+    module.stack.stack.setLen(module.stackSlots.len)
+
+proc addStackSlot*(module: Module, kind: VariableReferenceKind, v: Variable, value: Value) =
+  let i = module.stackSlots.len
+  module.addStackSlot(kind, v)
+  module.stack.set(i, value)
 
 proc define*(scope: Scope, variable: Variable, kind = Local) =
   variable.scope = scope
   variable.stackIndex = scope.module.stackSlots.len
-  scope.module.stackSlots.add(
-    StackSlot(kind: kind, variable: variable))
+  scope.module.addStackSlot(kind, variable)
   scope.variables.add(variable)
-
-proc set*(module: Module, variable: Variable, value: sink Value) =
-  assert variable.scope.module == module
-  module.stackSlots[variable.stackIndex].value = value
 
 proc evaluateStatic*(scope: Scope, ex: Expression, bound: TypeBound = +AnyTy): Value =
   scope.module.evaluateStatic(scope.compile(ex, bound))
@@ -51,8 +53,8 @@ proc evaluateStatic*(scope: Scope, ex: Expression, bound: TypeBound = +AnyTy): V
 proc setStatic*(variable: Variable, expression: Expression) =
   let value = variable.scope.compile(expression, +variable.knownType)
   variable.knownType = value.knownType
-  variable.scope.module.withStack:
-    stack.set(variable.stackIndex, value.evaluate(stack))
+  let module = variable.scope.module
+  module.stack.set(variable.stackIndex, value.evaluate(module.stack))
   variable.evaluated = true
 
 proc getType*(variable: Variable): Type =
@@ -70,16 +72,14 @@ proc capture*(c: Module, v: Variable): int =
     if not c.origin.isNil:
       discard c.origin.module.capture(v)
     result = c.captures.mgetOrPut(v, c.stackSlots.len)
-    c.stackSlots.add(
-      StackSlot(kind: Capture, variable: v,
-        value: v.scope.module.stackSlots[v.stackIndex].value))
+    c.addStackSlot(Capture, v, v.scope.module.get(v))
 
 proc variableGet*(c: Module, r: VariableReference): Statement =
   let t = r.type
   case r.kind
   of Constant:
     result = Statement(kind: skConstant,
-      constant: r.variable.scope.module.stackSlots[r.variable.stackIndex].value,
+      constant: r.variable.scope.module.get(r.variable),
       knownType: t)
   of Local, Argument:
     result = Statement(kind: skVariableGet,

@@ -37,7 +37,6 @@ template hashRefObj(T): untyped {.dirty.} =
 hashRefObj BoxedValue
 hashRefObj(ref Value)
 hashRefObj(ref Type)
-hashRefObj Stack
 
 template hashObj(T): untyped {.dirty.} =
   proc hash*(v: T): Hash {.noSideEffect.} =

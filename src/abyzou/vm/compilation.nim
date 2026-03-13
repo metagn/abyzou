@@ -3,7 +3,7 @@ import
   ../defines,
   ../lang/[expressions, number, shortstring],
   ../repr/[ids, primitives, arrays, typebasics, valueconstr, guesstype],
-  ./[typematch, linearizer, programs]
+  ./[typematch, linearizer, programs, treewalk]
 
 type
   CompileError* = object of CatchableError
@@ -486,4 +486,4 @@ proc compile*(ex: Expression, imports: seq[Scope], bound: TypeBound = +AnyTy): P
   else:
     result = Program(kind: TreeWalk, tw: TreeWalkProgram(
       instruction: body,#copy(body),
-      stack: makeStack(module)))
+      stack: module.stack.shallowRefresh()))
