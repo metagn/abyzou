@@ -218,7 +218,7 @@ else
     checkpoint "expected: " & b
     check a == b
 
-import abyzou/language/shortstring
+import abyzou/lang/shortstring
 
 test "equivalent syntax":
   let equivalents = {

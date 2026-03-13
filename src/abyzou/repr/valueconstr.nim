@@ -1,7 +1,7 @@
 import
   std/[sets, tables],
   ../util/box,
-  ../language/expressions,
+  ../lang/expressions,
   ./[primitives, arrays, typebasics]
 
 template withkind(k, val): Value =

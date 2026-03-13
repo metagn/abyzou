@@ -1,9 +1,9 @@
 import
   std/[hashes, tables, sets, strutils],
   ../defines,
-  ../language/[expressions, number, shortstring],
-  ./[ids, primitives, arrays, typebasics, typematch,
-    valueconstr, guesstype, treewalk, linearizer, programs]
+  ../lang/[expressions, number, shortstring],
+  ../repr/[ids, primitives, arrays, typebasics, valueconstr, guesstype],
+  ./[typematch, treewalk, linearizer, programs]
 
 defineTypeBase Meta, TypeBase(name: "Meta",
   arguments: @[newTypeParameter("", +baseType(FunctionTy))])

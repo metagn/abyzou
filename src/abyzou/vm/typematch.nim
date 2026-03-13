@@ -1,6 +1,6 @@
 import
   std/tables,
-  ./[primitives, typebasics]
+  ../repr/[primitives, typebasics]
 
 type
   TypeMatchError* = object of CatchableError

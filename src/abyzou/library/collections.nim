@@ -1,5 +1,6 @@
 import
-  ../vm/[primitives, compilation, valueconstr, typebasics]
+  ../repr/[primitives, valueconstr, typebasics],
+  ../vm/compilation
 
 import common
 

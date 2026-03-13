@@ -1,8 +1,9 @@
 import
   std/tables,
   ../defines,
-  ../language/[expressions, shortstring],
-  ../vm/[primitives, compilation, typebasics, valueconstr, linearizer]
+  ../lang/[expressions, shortstring],
+  ../repr/[primitives, typebasics, valueconstr],
+  ../vm/[compilation, linearizer]
 
 import common
 

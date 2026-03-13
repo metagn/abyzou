@@ -1,4 +1,4 @@
-import ./[primitives, arrays, treewalk, bytecode]
+import ../repr/[primitives, arrays], ./[treewalk, bytecode]
 
 type
   ProgramKind* = enum Linear, TreeWalk

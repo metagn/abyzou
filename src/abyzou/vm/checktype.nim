@@ -1,6 +1,7 @@
 import
   std/[tables, sets],
-  ./[primitives, typebasics, typematch, arrays, valueconstr]
+  ../repr/[primitives, typebasics, arrays, valueconstr],
+  ./typematch
 
 proc checkType*(value: Value, t: Type): bool =
   template eachAre(iter; types: seq[Type]): untyped =

@@ -1,7 +1,9 @@
 # bytecode interpreter
 
 {.push hint[DuplicateModuleImport]: off.}
-import ./[primitives, linearizer, arrays, guesstype, checktype, typebasics, valueconstr],
+import
+  ../repr/[primitives, arrays, guesstype, valueconstr, typebasics],
+  ./[linearizer, checktype],
   std/[sets, tables]
 
 proc shallowRefresh*(fun: LinearFunction): LinearFunction {.inline.} =
