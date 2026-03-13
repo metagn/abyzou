@@ -37,7 +37,6 @@ template hashRefObj(T): untyped {.dirty.} =
 hashRefObj BoxedValue
 hashRefObj(ref Value)
 hashRefObj(ref Type)
-hashRefObj Stack
 
 template hashObj(T): untyped {.dirty.} =
   proc hash*(v: T): Hash {.noSideEffect.} =
@@ -185,7 +184,7 @@ proc `$`*(module: Module): string =
   for v in module.stackSlots:
     let prefix =
       case v.kind
-      of Capture:
+      of StaticCapture:
         "  capture "
       of Constant: # not used
         "  constant "

@@ -3,7 +3,7 @@ import
   ../defines,
   ../lang/[expressions, shortstring],
   ../repr/[primitives, typebasics, valueconstr],
-  ../vm/[compilation, linearizer]
+  ../vm/[compilation, linearizer, treewalk]
 
 import common
 
@@ -54,7 +54,7 @@ module syntax:
     else:
       let body2 = [body][0]#copy(body) # weird orc bug workaround
       let tw = TreeWalkProgram(
-        stack: bodyScope.module.makeStack(),
+        stack: bodyScope.module.stack.shallowRefresh(),
         instruction: body2)
       fun = toValue(TreeWalkFunction(
         program: tw,

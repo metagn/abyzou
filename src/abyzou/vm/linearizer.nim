@@ -15,6 +15,8 @@ type
     LoadConstant
       ## shallow copies element from constant pool
     SetRegisterRegister # mov
+    LoadAddress, SetAddress
+      # XXX [bytecode, modules, memory] these can be optimized to be another version of registers if the module (up to equality of id in current module registry) is known at compile time
     NullaryCall, UnaryCall, BinaryCall, TernaryCall
     TupleCall
     TryDispatch, ArmType
@@ -43,6 +45,10 @@ type
       lc*: tuple[res: Register, constant: Constant]
     of SetRegisterRegister:
       srr*: tuple[dest, src: Register]
+    of LoadAddress:
+      la*: tuple[res, module: Register, ind: int32]
+    of SetAddress:
+      sa*: tuple[module: Register, ind: int32, val: Register]
     of NullaryCall:
       ncall*: tuple[res, callee: Register]
     of UnaryCall:
@@ -180,6 +186,10 @@ proc addBytes*(bytes: var openarray[byte], i: var int, instr: LinearInstruction)
     add instr.lc
   of SetRegisterRegister:
     add instr.srr
+  of LoadAddress:
+    add instr.la
+  of SetAddress:
+    add instr.sa
   of NullaryCall:
     add instr.ncall
   of UnaryCall:
@@ -284,6 +294,7 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
   template statement(s: Statement) {.callsite.} =
     linearize(module, fn, statementResult, s)
   let resultKind = result.kind
+  # XXX [bytecode] reads still generate for statement outputs, especially collections below
   case s.kind
   of skNone:
     case resultKind
@@ -366,6 +377,26 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
     of Value:
       result.value = val
     of Statement: discard
+  of skAddressGet:
+    fn.add(Instr(kind: LoadAddress, la:
+      # XXX [bytecode, modules, memory] should this really use another register? as opposed to directly using the address every time
+      (res: resultRegister(fn, result),
+        module: value(s.addressGetModule),
+        ind: s.addressGetIndex.int32)))
+  of skAddressSet:
+    # XXX [bytecode, modules, memory] should this really use another register? as opposed to directly using the address every time
+    let val = value(s.addressSetValue)
+    fn.add(Instr(kind: SetAddress, sa:
+      (module: value(s.addressSetModule),
+        ind: s.addressSetIndex.int32,
+        val: val)))
+    case resultKind
+    of SetRegister:
+      fn.add(Instr(kind: SetRegisterRegister, srr:
+        (dest: result.register, src: val)))
+    of Value:
+      result.value = val
+    of Statement: discard
   of skArmStack:
     let fun = fn.variableRegisters[s.armStackFunctionVariable]
     fn.add(Instr(kind: RefreshStack, rfs: (fun: fun)))
@@ -419,7 +450,7 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
     linearize(module, fn, result, s.effectBody)
     fn.add(Instr(kind: PopEffectHandler))
   of skTuple:
-    # XXX [bytecode] statement shouldn't build collection
+    # see statement output comment above
     let res = resultRegister(fn, result)
     fn.add(Instr(kind: InitTuple, coll:
       (res: res, siz: s.elements.len.int32)))
@@ -427,31 +458,31 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
       fn.add(Instr(kind: SetConstIndex, sci:
         (coll: res, ind: i.int32, val: value(a))))
   of skList:
-    # XXX [bytecode] statement shouldn't build collection
+    # see statement output comment above
     let res = resultRegister(fn, result)
     fn.add(Instr(kind: InitList, coll:
       (res: res, siz: s.elements.len.int32)))
     for i, a in s.elements:
-      # XXX [memory, references] SetIndex for lists and strings should only work if their pointer is
+      # XXX [memory] SetIndex for lists and strings should only work if their pointer is
       # in the same location in memory as arrays
       fn.add(Instr(kind: SetConstIndex, sci:
         (coll: res, ind: i.int32, val: value(a))))
   of skSet:
-    # XXX [bytecode] statement shouldn't build collection
+    # see statement output comment above
     let res = resultRegister(fn, result)
     fn.add(Instr(kind: InitSet, coll:
       (res: res, siz: s.elements.len.int32)))
     for a in s.elements:
-      # XXX [memory, references] no SetIndex for sets
+      # XXX [memory] no SetIndex for sets
       fn.add(Instr(kind: SetIndex, sri:
         (coll: res, ind: value(a), val: value(a))))
   of skTable:
-    # XXX [bytecode] statement shouldn't build collection
+    # see statement output comment above
     let res = resultRegister(fn, result)
     fn.add(Instr(kind: InitTable, coll:
       (res: res, siz: s.elements.len.int32)))
     for k, v in s.entries.items:
-      # XXX [memory, references] probably no SetIndex for tables
+      # XXX [memory] probably no SetIndex for tables
       fn.add(Instr(kind: SetIndex, sri:
         (coll: res, ind: value(k), val: value(v))))
   of skGetIndex:
@@ -504,8 +535,8 @@ proc createLinearContext*(module: Module): LinearContext =
     if module.stackSlots[i].kind == Argument:
       result.argRegisters.add(reg)
     # this might lose performance but is needed for capture arming
-    let defaultValue = module.stackSlots[i].value
-    if defaultValue.kind != vNone or module.stackSlots[i].kind == Capture:
+    let defaultValue = module.stack.get(i)
+    if defaultValue.kind != vNone or module.stackSlots[i].kind == StaticCapture:
       result.constants[i] = defaultValue
       result.add(LinearInstruction(kind: LoadConstant, lc:
         (res: reg, constant: Constant(i))))

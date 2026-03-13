@@ -37,7 +37,7 @@ type
     vReference
       ## reference value, can be mutable
       ## only value kind with reference semantics
-      # XXX [modules, references] ^ make this wrong with module idea, this can stay otherwise though
+      # XXX [modules, memory] ^ make this wrong with proper closures, this can stay otherwise though
     vArray
       ## like java array but typed like TS, implementation of tuples
     vFunction
@@ -50,7 +50,7 @@ type
     vExpression
     vStatement
     vModule
-      # XXX [modules, references] implement accessing modules and module variables
+      # XXX [modules, memory] implement accessing modules and module variables
     vBoxed
       ## boxed version of unboxed values, used for type info
     vInt64, vUint64, vFloat64
@@ -140,10 +140,10 @@ type
     of vEffect:
       effectValue*: Box[Value]
     of vReference:
-      # XXX [memory, references] figure out how to optimize this for mutable collections - probably wont and just have the collections act like references
+      # XXX [memory] figure out how to optimize this for mutable collections - probably wont and just have the collections act like references
       referenceValue*: Reference[Value]
     of vArray:
-      # XXX [memory, references] maybe match pointer field location with vList, vString
+      # XXX [memory] maybe match pointer field location with vList, vString
       arrayValue*: RefArray[Value]
     of vBoxed:
       boxedValue*: BoxedValue[Value]
@@ -156,10 +156,10 @@ type
     of vType:
       typeValue*: BoxedValue[Type]
     of vString:
-      # XXX [memory, references] maybe match pointer field location with vArray, vList
+      # XXX [memory] maybe match pointer field location with vArray, vList
       stringValue*: BoxedValue[string]
     of vList:
-      # XXX [memory, references] maybe match pointer field location with vArray, vString
+      # XXX [memory] maybe match pointer field location with vArray, vString
       listValue*: BoxedValue[seq[Value]]
     of vSet:
       setValue*: BoxedValue[HashSet[Value]]
@@ -276,8 +276,16 @@ type
     boundType*: Type
     variance*: Variance
 
-  Stack* = ref object
-    stack*: Array[Value]
+  ModuleStackSeq* = seq[Value]
+  ModuleStackImplObj* = object
+    stack*: ModuleStackSeq
+  ModuleStackImplSeq* = distinct ModuleStackSeq
+  ModuleStack* = (
+    when defined(gcDestructors):
+      ModuleStackImplObj
+    else:
+      ModuleStackImplSeq
+  )
 
   NativeFunction* = #[ref ]#object
     # value first just to copy BoxedValue
@@ -285,7 +293,7 @@ type
     #`type`*: Type
 
   TreeWalkProgram* = object
-    stack*: Stack
+    stack*: ModuleStack
       ## persistent stack
       ## gets shallow copied when function is run
     instruction*: Statement
@@ -308,6 +316,7 @@ type
     # value first just to copy BoxedValue
     program*: LinearProgram
     `type`*: Type
+
   BinaryInstructionKind* = enum
     AddInt, SubInt, MulInt, DivInt
     AddFloat, SubFloat, MulFloat, DivFloat
@@ -323,6 +332,7 @@ type
     skSequence
     # stack
     skVariableGet, skVariableSet
+    skAddressGet, skAddressSet
     skArmStack
     # goto
     skIf, skWhile, skDoUntil
@@ -357,6 +367,13 @@ type
     of skVariableSet:
       variableSetIndex*: int
       variableSetValue*: Statement
+    of skAddressGet:
+      addressGetModule*: Statement
+      addressGetIndex*: int
+    of skAddressSet:
+      addressSetModule*: Statement
+      addressSetIndex*: int
+      addressSetValue*: Statement
     of skArmStack:
       armStackFunctionVariable*: int
       armStackCaptures*: seq[tuple[index, valueIndex: int]]
@@ -402,12 +419,12 @@ type
     genericParams*: seq[TypeParameter]
       # XXX [types] maybe make this a tuple type too with signature for named and default generic params
     lazyExpression*: Expression
+      # XXX [modules] actually use this for easy mutual recursion
     evaluated*: bool
 
   StackSlot* = object
     kind*: VariableReferenceKind
     variable*: Variable
-    value*: Value
 
   Module* = ref object
     ## current module or function
@@ -419,7 +436,8 @@ type
     captures*: Table[Variable, int]
     top*: Scope
     stackSlots*: seq[StackSlot] ## should not shrink
-  
+    stack*: ModuleStack
+
   Scope* = ref object
     ## restricted subset of variables in a context
     parent*: Scope
@@ -428,14 +446,14 @@ type
     variables*: seq[Variable] ## should not shrink
 
   VariableReferenceKind* = enum
-    Local, Argument, Constant, Capture
+    Local, Argument, Constant, StaticCapture
 
   VariableReference* = object
     variable*: Variable
     `type`*: Type ## must have a known type
     case kind*: VariableReferenceKind
     of Local, Argument, Constant: discard
-    of Capture:
+    of StaticCapture:
       captureIndex*: int
 
   Context* = object
@@ -455,6 +473,23 @@ template tupleValue*(v: Value): untyped =
 
 # for now clashes with `module` macro for libraries
 #proc module*(c: Context): Module {.inline.} = c.scope.module
+
+when ModuleStack is ModuleStackImplSeq:
+  proc stack*(st: ModuleStack): ModuleStackSeq {.inline.} = ModuleStackSeq(st)
+  proc stack*(st: var ModuleStack): var ModuleStackSeq {.inline.} = ModuleStackSeq(st)
+  template get*(st: ModuleStack, index: int): untyped =
+    ModuleStackSeq(st)[index]
+  template getMut*(st: var ModuleStack, index: int): untyped =
+    ModuleStackSeq(st)[index]
+  template set*(st: var ModuleStack, index: int, value: Value) =
+    ModuleStackSeq(st)[index] = value
+else:
+  proc get*(stack: ModuleStack, index: int): lent Value {.inline.} =
+    stack.stack[index]
+  proc getMut*(stack: var ModuleStack, index: int): var Value {.inline.} =
+    stack.stack[index]
+  proc set*(stack: var ModuleStack, index: int, value: sink Value) {.inline.} =
+    stack.stack[index] = value
 
 import ./primitiveprocs
 export primitiveprocs

@@ -3,15 +3,8 @@ import
   ../repr/[primitives, arrays, valueconstr, typebasics],
   ./checktype
 
-proc get*(stack: Stack, index: int): lent Value {.inline.} =
-  stack.stack[index]
-proc set*(stack: Stack, index: int, value: sink Value) {.inline.} =
-  stack.stack[index] = value
-
-proc shallowRefresh*(stack: Stack): Stack {.inline.} =
-  result = Stack(stack: initArray[Value](stack.stack.len))
-  for i in 0 ..< stack.stack.len:
-    result.stack[i] = stack.stack[i]
+proc shallowRefresh*(stack: ModuleStack): ModuleStack {.inline.} =
+  result = stack
 
 proc shallowRefresh*(fun: TreeWalkFunction): TreeWalkFunction {.inline.} =
   new(result)
@@ -27,10 +20,10 @@ template toNegatedBool*(val: Value): bool =
 template toBool*(val: Value): bool =
   val.boolValue
 
-proc evaluate*(ins: Statement, stack: Stack, effectHandler: EffectHandler = nil): Value
+proc evaluate*(stack: var ModuleStack, ins: Statement, effectHandler: EffectHandler = nil): Value
 
 template runCheckEffect(instr: Statement, stack, effectHandler): Value =
-  let val = evaluate(instr, stack, effectHandler)
+  let val = evaluate(stack, instr, effectHandler)
   if val.kind == vEffect and (effectHandler.isNil or not effectHandler(val.effectValue.unref)):
     return val
   val
@@ -53,7 +46,7 @@ proc call*(fun: Value, args: sink Array[Value], effectHandler: EffectHandler = n
     result = fun.linearFunctionValue.program.call(args.toOpenArray(0, args.len - 1))
   else: raiseAssert("cannot call " & $fun)
 
-proc evaluate*(ins: Statement, stack: Stack, effectHandler: EffectHandler = nil): Value =
+proc evaluate*(stack: var ModuleStack, ins: Statement, effectHandler: EffectHandler = nil): Value =
   template run(instr; stack = stack; effectHandler = effectHandler): untyped =
     runCheckEffect(instr, stack, effectHandler)
   let ins = ins[]
@@ -89,6 +82,15 @@ proc evaluate*(ins: Statement, stack: Stack, effectHandler: EffectHandler = nil)
   of skVariableSet:
     result = run ins.variableSetValue
     stack.set(ins.variableSetIndex, result)
+  of skAddressGet:
+    let m = unboxStripType run ins.addressGetModule
+    assert m.kind == vModule
+    result = m.moduleValue.stack.get(ins.addressGetIndex)
+  of skAddressSet:
+    let m = unboxStripType run ins.addressSetModule
+    assert m.kind == vModule
+    result = run ins.addressSetValue
+    m.moduleValue.stack.set(ins.addressSetIndex, result)
   of skArmStack:
     result = stack.get(ins.armStackFunctionVariable)
     # XXX [function-arm] missing impl for linear function?

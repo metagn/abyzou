@@ -98,6 +98,16 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
     of SetRegisterRegister:
       read instr.srr
       mov instr.srr.src, instr.srr.dest
+    of LoadAddress:
+      read instr.la
+      let module = unboxStripType get instr.la.module
+      assert module.kind == vModule
+      put instr.la.res, module.moduleValue.stack.get(instr.la.ind)
+    of SetAddress:
+      read instr.sa
+      let module = unboxStripType get instr.sa.module
+      assert module.kind == vModule
+      module.moduleValue.stack.set(instr.sa.ind, get instr.sa.val)
     of NullaryCall:
       read instr.ncall
       let fn {.cursor.} = unboxStripType get instr.ncall.callee
@@ -326,7 +336,7 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
       read instr.gri
       let coll = get instr.gri.coll
       let ind = get instr.gri.ind
-      # XXX [memory, references] maybe prevent dispatch here
+      # XXX [memory] maybe prevent dispatch here
       case coll.kind
       of vList:
         put instr.gri.res, coll.listValue.value.unref[ind.unboxStripType.int32Value]
@@ -342,7 +352,7 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
       let coll = get instr.sri.coll
       let ind = get instr.sri.ind
       let val = get instr.sri.val
-      # XXX [memory, references] maybe prevent dispatch here
+      # XXX [memory] maybe prevent dispatch here
       case coll.kind
       of vList:
         coll.listValue.value.unref[ind.unboxStripType.int32Value] = val
