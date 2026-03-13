@@ -40,6 +40,10 @@ type
       # XXX [modules, references] ^ make this wrong with module idea, this can stay otherwise though
     vArray
       ## like java array but typed like TS, implementation of tuples
+    vFunction
+      ## treewalk function
+    vLinearFunction
+      ## linearized (bytecode) function
     vNativeFunction
       ## Nim function that takes values as argument
     # could be pointers or serialized but for now this is more efficient:
@@ -58,9 +62,6 @@ type
       ## both seq and string are references to save memory
     vSet
     vTable
-    vFunction
-      ## function
-    vLinearFunction
     vContext
     # bigints can be added
     # native types in general can be BoxedValue[pointer]
@@ -96,7 +97,13 @@ type
     tyValue = "Value"
       # XXX [types] maybe only makes sense in type arg context and could go in separate TypeArg type?
 
-const unboxedValueKinds* = {vNone..pred(vBoxed)}
+const
+  allValueKinds* = {low(ValueKind)..high(ValueKind)}
+  boxedValueKinds* = {vBoxed..high(ValueKind)}
+  functionValueKinds* = {vFunction..vNativeFunction}
+  typedValueKinds* = boxedValueKinds + functionValueKinds - {vNativeFunction}
+  untypedValueKinds* = allValueKinds - typedValueKinds
+
 const
   allTypeKinds* = {low(TypeKind)..high(TypeKind)}
   concreteTypeKinds* = {tyTuple, #[tyInstance,]# tyNoneValue..tyType}
@@ -159,14 +166,11 @@ type
     of vTable:
       tableValue*: BoxedValue[Table[Value, Value]]
     of vFunction:
-      # XXX [function] merge into Function object
-      functionValue*: BoxedValue[TreeWalkProgram]
+      functionValue*: TreeWalkFunction
     of vLinearFunction:
-      # XXX [function] merge into Function object
-      linearFunctionValue*: BoxedValue[LinearProgram]
+      linearFunctionValue*: LinearFunction
     of vNativeFunction:
-      # XXX [function] merge into Function object
-      nativeFunctionValue*: proc (args: openarray[Value]): Value {.nimcall.}
+      nativeFunctionValue*: NativeFunction
     of vExpression:
       expressionValue*: Expression
     of vStatement:
@@ -245,8 +249,9 @@ type
         # XXX [tuple] either move to property, or allow non-trailing
         # XXX [tuple] definite length varargs? i.e. array[3, int]
       elementNames*: Table[string, int]
-      # XXX [tuple] also Defaults purely for initialization/conversion?
+      # XXX [functions, tuple] also Defaults purely for initialization/conversion?
       # meaning only considered in function type relation
+      # - maybe have as property on functions then
     of noArgNativeTypes: discard
     of argNativeTypes:
       nativeArgs*: seq[Type]
@@ -274,18 +279,35 @@ type
   Stack* = ref object
     stack*: Array[Value]
 
+  NativeFunction* = #[ref ]#object
+    # value first just to copy BoxedValue
+    callback*: proc (args: openarray[Value]): Value {.nimcall.}
+    #`type`*: Type
+
   TreeWalkProgram* = object
     stack*: Stack
       ## persistent stack
       ## gets shallow copied when function is run
     instruction*: Instruction
-  
+
+  # XXX [functions] add function names to objects but then native function is unnamed
+
+  TreeWalkFunction* = ref object
+    # value first just to copy BoxedValue
+    program*: TreeWalkProgram
+    `type`*: Type
+
   LinearProgram* = object
     registerCount*: int
     argPositions*: Array[int] ## last is result
     constants*: Array[Value] # XXX [serialization] serialize values
     jumpLocations*: Array[int]
     instructions*: seq[byte]
+
+  LinearFunction* = ref object
+    # value first just to copy BoxedValue
+    program*: LinearProgram
+    `type`*: Type
 
   InstructionKind* = enum
     NoOp
@@ -313,6 +335,7 @@ type
   UnaryInstructionKind* = range[NegInt .. NegFloat]
 
   InstructionObj* = object ## compact version of Statement
+    # XXX [treewalk] maybe remove in favor of just statements?
     case kind*: InstructionKind
     of NoOp: discard
     of Constant:
@@ -391,7 +414,7 @@ type
       callee*: Statement
       arguments*: seq[Statement]
     of skDispatch:
-      # XXX [dispatch] generalize dispatch result
+      # XXX [typematch] generalize dispatch result - ??? what does this mean
       dispatchees*: seq[(seq[Type], Statement)]
       dispatchArguments*: seq[Statement]
     of skSequence:
@@ -403,6 +426,7 @@ type
       variableSetValue*: Statement
     of skArmStack:
       armStackFunction*: Statement
+        # XXX [function-arm] needs to be a function ADDRESS
       armStackCaptures*: seq[tuple[index, valueIndex: int]]
         ## list of (variable in function stack, variable in local stack)
         ## only used for passing captures so the value is just a variable index
@@ -434,7 +458,7 @@ type
       binaryInstructionKind*: BinaryInstructionKind
       binary1*, binary2*: Statement
   Statement* = ref StatementObj
-  
+
   Variable* = ref object
     id*: VariableId
     name*: string

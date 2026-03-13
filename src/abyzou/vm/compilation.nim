@@ -417,7 +417,7 @@ proc compileMetaCall*(scope: Scope, name: string, ex: Expression, bound: TypeBou
         arguments: arguments).toInstruction
       result = scope.module.evaluateStatic(call).statementValue
     elif subMetas.len != 0:
-      # XXX [dispatch] sub meta dispatch, needs better output and described semantics
+      # XXX [typematch, macros] sub meta dispatch, needs better output and described semantics
       var argumentValues = newSeq[Variable](ex.arguments.len)
       var dispatches: seq[tuple[condition, body: Statement]]
       for d in subMetas:
@@ -505,7 +505,7 @@ proc compileRuntimeCall*(scope: Scope, ex: Expression, bound: TypeBound,
   functionType = funcType(if bound.variance == Contravariant: AnyTy else: bound.boundType, argumentTypes)
   # lowest supertype function:
   try:
-    # XXX [tuple] named arguments
+    # XXX [tuple, functions] named arguments
     var withConstructor = functionType
     withConstructor.nativeArgs[0] = TupleConstructorTy[withConstructor.nativeArgs[0]]
     let callee = map(ex.address, -withConstructor)
@@ -539,7 +539,7 @@ proc compileRuntimeCall*(scope: Scope, ex: Expression, bound: TypeBound,
             let m = match(-argumentTypes[j], pt)
             if m.matches:
               # optimize checking types we know match
-              # XXX [typematch] do this recursively using deep matches for some types
+              # XXX [typematch, type-arming] do this recursively using deep matches for some types
               argTypes[j] = AnyTy
             else:
               argTypes[j] = pt
@@ -680,7 +680,7 @@ proc compile*(scope: Scope, ex: Expression, bound: TypeBound): Statement =
   of String, SingleQuoteString: result = constant(ex.str)
   of Wrapped: result = forward(ex.wrapped)
   of Name, Symbol:
-    # XXX [namespace] warn on ambiguity, thankfully recency is accounted for
+    # XXX [modules] warn on ambiguity, thankfully recency is accounted for
     let name = if ex.kind == Symbol: $ex.symbol else: ex.identifier
     result = variableGet(scope.module, resolve(scope, ex, name, bound))
   of Dot:

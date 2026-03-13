@@ -63,8 +63,10 @@ proc checkType*(value: Value, t: Type): bool =
   of tyUint64: value.kind == vUint64
   of tyFloat64: value.kind == vFloat64
   of tyFunction:
-    # XXX [function, typematch] this is not necessarily correct, depends on boxed value type
-    value.kind in {vFunction, vNativeFunction, vLinearFunction}
+    (value.kind == vFunction and match(value.functionValue.type, t).matches) or
+      (value.kind == vLinearFunction and match(value.linearFunctionValue.type, t).matches) or
+      # XXX [typematch, functions] just expect this boxed i guess
+      (value.kind == vNativeFunction and true #[match(value.nativeFunctionValue.type, t).matches]#)
   of tyReference:
     value.kind == vReference and (isBase or value.referenceValue.unref.checkType(nativeArgs[0]))
   of tyList:

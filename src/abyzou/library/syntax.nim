@@ -14,7 +14,7 @@ module syntax:
     let st = context.scope.compile(args[0], +AnyTy)
     result = toValue constant(context.scope.module.evaluateStatic(st.toInstruction), st.knownType)
   
-  # XXX [types] generic assignments or functions
+  # XXX [types, macros, functions] generic assignments or functions
   proc makeFn(scope: Scope, arguments: seq[Expression], body: Expression,
     name: string, returnBound: TypeBound, returnBoundSet: bool): Statement =
     let module = scope.childModule()
@@ -42,11 +42,16 @@ module syntax:
     var fun: Value
     if useBytecode:
       let lc = linear(bodyScope.module, body)
-      fun = toValue(lc.toFunction())
+      fun = toValue(LinearFunction(
+        program: lc.toFunction(),
+        type: fnType))
     else:
-      fun = toValue(TreeWalkProgram(
+      let tw = TreeWalkProgram(
         stack: bodyScope.module.makeStack(),
-        instruction: body.toInstruction))
+        instruction: body.toInstruction)
+      fun = toValue(TreeWalkFunction(
+        program: tw,
+        type: fnType))
     setTypeIfBoxed(fun, fnType)
     if not v.isNil:
       scope.module.set(v, fun)

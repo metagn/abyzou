@@ -4,6 +4,12 @@
 import ./[primitives, linearizer, arrays, guesstype, checktype, typebasics, valueconstr],
   std/[sets, tables]
 
+proc shallowRefresh*(fun: LinearFunction): LinearFunction {.inline.} =
+  let prev {.cursor.} = fun.program.constants
+  new(result)
+  result[] = fun[]
+  result.program.constants = toArray(prev.toOpenArray(0, prev.len - 1))
+
 proc call*(lf: LinearProgram, args: openarray[Value]): Value
 
 when not declared(EffectHandler):
@@ -96,13 +102,13 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
       let val =
         case fn.kind
         of vNativeFunction:
-          fn.nativeFunctionValue([])
+          fn.nativeFunctionValue.callback([])
         of vFunction:
-          fn.functionValue.value.call(
+          fn.functionValue.program.call(
             default(Array[Value]),
             effectHandler)
         of vLinearFunction:
-          fn.linearFunctionValue.value.call([])
+          fn.linearFunctionValue.program.call([])
         else: raiseAssert("cannot call " & $fn)
       checkEffect val
       put instr.ncall.res, val
@@ -112,14 +118,14 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
       let val =
         case fn.kind
         of vNativeFunction:
-          fn.nativeFunctionValue(
+          fn.nativeFunctionValue.callback(
             [get instr.ucall.arg1])
         of vFunction:
-          fn.functionValue.value.call(
+          fn.functionValue.program.call(
             toArray([get instr.ucall.arg1]),
             effectHandler)
         of vLinearFunction:
-          fn.linearFunctionValue.value.call([get instr.ucall.arg1])
+          fn.linearFunctionValue.program.call([get instr.ucall.arg1])
         else: raiseAssert("cannot call " & $fn)
       checkEffect val
       put instr.ucall.res, val
@@ -130,11 +136,11 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
       let val =
         case fn.kind
         of vNativeFunction:
-          fn.nativeFunctionValue(args)
+          fn.nativeFunctionValue.callback(args)
         of vFunction:
-          fn.functionValue.value.call(toArray(args), effectHandler)
+          fn.functionValue.program.call(toArray(args), effectHandler)
         of vLinearFunction:
-          fn.linearFunctionValue.value.call(args)
+          fn.linearFunctionValue.program.call(args)
         else: raiseAssert("cannot call " & $fn)
       checkEffect val
       put instr.bcall.res, val
@@ -145,11 +151,11 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
       let val =
         case fn.kind
         of vNativeFunction:
-          fn.nativeFunctionValue(args)
+          fn.nativeFunctionValue.callback(args)
         of vFunction:
-          fn.functionValue.value.call(toArray(args), effectHandler)
+          fn.functionValue.program.call(toArray(args), effectHandler)
         of vLinearFunction:
-          fn.linearFunctionValue.value.call(args)
+          fn.linearFunctionValue.program.call(args)
         else: raiseAssert("cannot call " & $fn)
       checkEffect val
       put instr.tcall.res, val
@@ -160,11 +166,11 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
       let val =
         case fn.kind
         of vNativeFunction:
-          fn.nativeFunctionValue(args.toOpenArray(0, args.len - 1))
+          fn.nativeFunctionValue.callback(args.toOpenArray(0, args.len - 1))
         of vFunction:
-          fn.functionValue.value.call(args, effectHandler)
+          fn.functionValue.program.call(args, effectHandler)
         of vLinearFunction:
-          fn.linearFunctionValue.value.call(args.toOpenArray(0, args.len - 1))
+          fn.linearFunctionValue.program.call(args.toOpenArray(0, args.len - 1))
         else: raiseAssert("cannot call " & $fn)
       checkEffect val
       put instr.tupcall.res, val
@@ -182,11 +188,11 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
         let val =
           case fn.kind
           of vNativeFunction:
-            fn.nativeFunctionValue(args.toOpenArray(0, args.len - 1))
+            fn.nativeFunctionValue.callback(args.toOpenArray(0, args.len - 1))
           of vFunction:
-            fn.functionValue.value.call(args, effectHandler)
+            fn.functionValue.program.call(args, effectHandler)
           of vLinearFunction:
-            fn.linearFunctionValue.value.call(args.toOpenArray(0, args.len - 1))
+            fn.linearFunctionValue.program.call(args.toOpenArray(0, args.len - 1))
           else: raiseAssert("cannot call " & $fn)
         checkEffect val
         put instr.tdisp.res, val
@@ -209,24 +215,22 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
       let fn = get(instr.arm.fun)
       case fn.kind
       of vFunction:
-        fn.functionValue.value.stack.set(instr.arm.ind, get(instr.arm.val))
+        fn.functionValue.program.stack.set(instr.arm.ind, get(instr.arm.val))
       of vLinearFunction:
-        fn.linearFunctionValue.value.constants[instr.arm.ind] = get instr.arm.val
+        fn.linearFunctionValue.program.constants[instr.arm.ind] = get instr.arm.val
       else: raiseAssert("cannot arm stack of " & $fn)
     of RefreshStack:
       read instr.rfs
       let fn = get(instr.rfs.fun)
       case fn.kind
       of vFunction:
-        fn.functionValue.value.stack = fn.functionValue.value.stack.shallowRefresh()
+        # XXX [function-arm, treewalk, bytecode] ??? uncommented should be correct but not tested
+        #fn.functionValue.program.stack = fn.functionValue.program.stack.shallowRefresh()
+        let oldFn = fn.functionValue
+        getMut(instr.rfs.fun).functionValue = oldFn.shallowRefresh()
       of vLinearFunction:
-        let prev = fn.linearFunctionValue.value.constants
-        let oldBoxed = fn.linearFunctionValue[]
-        getMut(instr.rfs.fun).linearFunctionValue = nil
-        new(getMut(instr.rfs.fun).linearFunctionValue)
-        getMut(instr.rfs.fun).linearFunctionValue[] = oldBoxed
-        getMut(instr.rfs.fun).linearFunctionValue.value.constants =
-          toArray(prev.toOpenArray(0, prev.len - 1))
+        let oldFn = fn.linearFunctionValue
+        getMut(instr.rfs.fun).linearFunctionValue = oldFn.shallowRefresh()
       else: raiseAssert("cannot refresh stack of " & $fn)
     of JumpPoint:
       read instr.jpt
@@ -257,18 +261,18 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
       var handler: proc (effect: Value): bool
       case h.kind
       of vNativeFunction:
-        let f = h.nativeFunctionValue
+        let f = h.nativeFunctionValue.callback
         handler = proc (effect: Value): bool =
           f([effect]).toBool
       of vFunction:
-        let f = h.functionValue.value
+        let f = h.functionValue.program
         handler = proc (effect: Value): bool =
           let val = f.call([effect].toArray)
           if val.kind == vEffect and (effectHandler.isNil or not effectHandler(val)):
             return false
           val.toBool
       of vLinearFunction:
-        let f = h.linearFunctionValue.value
+        let f = h.linearFunctionValue.program
         handler = proc (effect: Value): bool =
           let val = f.call([effect])
           if val.kind == vEffect and (effectHandler.isNil or not effectHandler(val)):

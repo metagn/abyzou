@@ -7,10 +7,15 @@ proc get*(stack: Stack, index: int): lent Value {.inline.} =
 proc set*(stack: Stack, index: int, value: sink Value) {.inline.} =
   stack.stack[index] = value
 
-proc shallowRefresh*(stack: Stack): Stack =
+proc shallowRefresh*(stack: Stack): Stack {.inline.} =
   result = Stack(stack: initArray[Value](stack.stack.len))
   for i in 0 ..< stack.stack.len:
     result.stack[i] = stack.stack[i]
+
+proc shallowRefresh*(fun: TreeWalkFunction): TreeWalkFunction {.inline.} =
+  new(result)
+  result[] = fun[]
+  result.program.stack = result.program.stack.shallowRefresh()
 
 type EffectHandler* = proc (effect: Value): bool
   ## returns true to continue execution
@@ -40,11 +45,11 @@ import ./bytecode
 proc call*(fun: Value, args: sink Array[Value], effectHandler: EffectHandler = nil): Value {.inline.} =
   case fun.kind
   of vNativeFunction:
-    result = fun.nativeFunctionValue(args.toOpenArray(0, args.len - 1))
+    result = fun.nativeFunctionValue.callback(args.toOpenArray(0, args.len - 1))
   of vFunction:
-    result = fun.functionValue.value.call(args, effectHandler)
+    result = fun.functionValue.program.call(args, effectHandler)
   of vLinearFunction:
-    result = fun.linearFunctionValue.value.call(args.toOpenArray(0, args.len - 1))
+    result = fun.linearFunctionValue.program.call(args.toOpenArray(0, args.len - 1))
   else: raiseAssert("cannot call " & $fun)
 
 proc evaluate*(ins: Instruction, stack: Stack, effectHandler: EffectHandler = nil): Value =
@@ -91,11 +96,14 @@ proc evaluate*(ins: Instruction, stack: Stack, effectHandler: EffectHandler = ni
     stack.set(ins.variableSetIndex, result)
   of ArmStack:
     result = run ins.armStackFunction
-    var fun = result.functionValue.value
+    # XXX [function-arm, treewalk, bytecode] no refresh for linear function?
+    var fn = result.functionValue
+    # XXX [function-arm, treewalk] wtf is going on here actually, next statement should be correct position
+    #fn = fn.shallowRefresh()
     for a, b in ins.armStackCaptures.items:
-      fun.stack.set(a, stack.get(b))
-    fun.stack = fun.stack.shallowRefresh()
-    result = toValue fun
+      fn.program.stack.set(a, stack.get(b))
+    fn = fn.shallowRefresh()
+    result = toValue fn
   of If:
     let cond = run ins.ifCondition
     if cond.toBool:
@@ -119,18 +127,18 @@ proc evaluate*(ins: Instruction, stack: Stack, effectHandler: EffectHandler = ni
     var handler: proc (effect: Value): bool
     case h.kind
     of vNativeFunction:
-      let f = h.nativeFunctionValue
+      let f = h.nativeFunctionValue.callback
       handler = proc (effect: Value): bool =
         f([effect]).toBool
     of vFunction:
-      let f = h.functionValue.value
+      let f = h.functionValue.program
       handler = proc (effect: Value): bool =
         let val = f.call([effect].toArray)
         if val.kind == vEffect and (effectHandler.isNil or not effectHandler(val)):
           return false
         val.toBool
     of vLinearFunction:
-      let f = h.linearFunctionValue.value
+      let f = h.linearFunctionValue.program
       handler = proc (effect: Value): bool =
         let val = f.call([effect])
         if val.kind == vEffect and (effectHandler.isNil or not effectHandler(val)):

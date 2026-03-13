@@ -43,9 +43,11 @@ proc toValue*(x: Type): Value = Value(kind: vType, typeValue: BoxedValue[Type](t
 proc toValue*(x: Box[Type]): Value = Value(kind: vType, typeValue: BoxedValue[Type](type: TypeTy[x.unbox]))
 proc toValue*(x: sink HashSet[Value]): Value = withkindbox(set, x)
 proc toValue*(x: sink Table[Value, Value]): Value = withkindbox(table, x)
-proc toValue*(x: proc (args: openarray[Value]): Value {.nimcall.}): Value = withkind(nativeFunction, x)
-proc toValue*(x: TreeWalkProgram): Value = withkindbox(function, x)
-proc toValue*(x: LinearProgram): Value = withkindbox(linearFunction, x)
+proc toValue*(x: NativeFunction#[proc (args: openarray[Value]): Value {.nimcall.}]#): Value = withkind(nativeFunction, x)
+proc toValue*(x: proc (args: openarray[Value]): Value {.nimcall.}): Value =
+  toValue(NativeFunction(callback: x))
+proc toValue*(x: TreeWalkFunction): Value = withkind(function, x)
+proc toValue*(x: LinearFunction): Value = withkind(linearFunction, x)
 proc toValue*(x: Expression): Value = withkind(expression, x)
 proc toValue*(x: Statement): Value = withkind(statement, x)
 proc toValue*(x: Context): Value = withkindbox(context, x)
@@ -57,7 +59,7 @@ proc unboxStripType*(x: Value): Value {.inline.} =
 
 proc setTypeIfBoxed*(x: Value, t: Type) {.inline.} =
   case x.kind
-  of unboxedValueKinds: discard
+  of untypedValueKinds: discard
   of vBoxed: x.boxedValue.type = t
   of vList: x.listValue.type = t
   of vString: x.stringValue.type = t
@@ -69,11 +71,12 @@ proc setTypeIfBoxed*(x: Value, t: Type) {.inline.} =
   of vTable: x.tableValue.type = t
   of vFunction: x.functionValue.type = t
   of vLinearFunction: x.linearFunctionValue.type = t
+  #of vNativeFunction: x.nativeFunctionValue.type = t
   of vContext: x.contextValue.type = t
 
 proc getTypeIfBoxed*(x: Value): Type {.inline.} =
   case x.kind
-  of unboxedValueKinds: discard
+  of untypedValueKinds: discard
   of vBoxed: result = x.boxedValue.type
   of vList: result = x.listValue.type
   of vString: result = x.stringValue.type
@@ -85,10 +88,12 @@ proc getTypeIfBoxed*(x: Value): Type {.inline.} =
   of vTable: result = x.tableValue.type
   of vFunction: result = x.functionValue.type
   of vLinearFunction: result = x.linearFunctionValue.type
+  #of vNativeFunction: result = x.nativeFunctionValue.type
   of vContext: result = x.contextValue.type
 
 proc makeTyped*(x: var Value, t: Type) =
-  if x.kind in unboxedValueKinds:
+  # XXX [type-arming] maybe don't do if `t` is trivial/obvious, i.e. is just a native type without properties
+  if x.kind in untypedValueKinds:
     let y = Value(kind: vBoxed, boxedValue: BoxedValue[Value](type: t, value: x))
     x = y
   else:
