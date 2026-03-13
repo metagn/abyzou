@@ -505,7 +505,7 @@ proc createLinearContext*(module: Module): LinearContext =
       result.argRegisters.add(reg)
     # this might lose performance but is needed for capture arming
     let defaultValue = module.stack.get(i)
-    if defaultValue.kind != vNone or module.stackSlots[i].kind == Capture:
+    if defaultValue.kind != vNone or module.stackSlots[i].kind == StaticCapture:
       result.constants[i] = defaultValue
       result.add(LinearInstruction(kind: LoadConstant, lc:
         (res: reg, constant: Constant(i))))

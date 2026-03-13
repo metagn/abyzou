@@ -72,7 +72,7 @@ proc capture*(c: Module, v: Variable): int =
     if not c.origin.isNil:
       discard c.origin.module.capture(v)
     result = c.captures.mgetOrPut(v, c.stackSlots.len)
-    c.addStackSlot(Capture, v, v.scope.module.get(v))
+    c.addStackSlot(StaticCapture, v, v.scope.module.get(v))
 
 proc variableGet*(c: Module, r: VariableReference): Statement =
   let t = r.type
@@ -85,7 +85,7 @@ proc variableGet*(c: Module, r: VariableReference): Statement =
     result = Statement(kind: skVariableGet,
       variableGetIndex: r.variable.stackIndex,
       knownType: t)
-  of Capture:
+  of StaticCapture:
     result = Statement(kind: skVariableGet,
       variableGetIndex: c.capture(r.variable),
       knownType: t)
@@ -98,11 +98,11 @@ proc variableSet*(c: Module, r: VariableReference, value: Statement, source: Exp
       variableSetIndex: r.variable.stackIndex,
       variableSetValue: value,
       knownType: t)
-  of Constant, Capture:
+  of Constant, StaticCapture:
     raise (ref OutOfScopeModifyError)(expression: source,
       variable: r.variable, referenceKind: r.kind,
       msg: "cannot modify " &
-        (if r.kind == Capture: "captured " else: "constant ") &
+        (if r.kind == StaticCapture: "captured " else: "constant ") &
         r.variable.name & ", use a reference instead")
 
 proc symbols*(scope: Scope, name: string, bound: TypeBound,
@@ -117,7 +117,7 @@ proc symbols*(scope: Scope, name: string, bound: TypeBound,
           a
         else:
           VariableReference(variable: a.variable, type: a.type,
-            kind: Capture, captureIndex: -1)
+            kind: StaticCapture, captureIndex: -1)
       result.add(b)
   for i, im in scope.imports:
     let addrs = symbols(im, name, bound, nameHash = nameHash)

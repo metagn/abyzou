@@ -429,14 +429,14 @@ type
     variables*: seq[Variable] ## should not shrink
 
   VariableReferenceKind* = enum
-    Local, Argument, Constant, Capture
+    Local, Argument, Constant, StaticCapture
 
   VariableReference* = object
     variable*: Variable
     `type`*: Type ## must have a known type
     case kind*: VariableReferenceKind
     of Local, Argument, Constant: discard
-    of Capture:
+    of StaticCapture:
       captureIndex*: int
 
   Context* = object

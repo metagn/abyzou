@@ -184,7 +184,7 @@ proc `$`*(module: Module): string =
   for v in module.stackSlots:
     let prefix =
       case v.kind
-      of Capture:
+      of StaticCapture:
         "  capture "
       of Constant: # not used
         "  constant "
