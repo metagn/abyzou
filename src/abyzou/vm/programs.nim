@@ -17,6 +17,6 @@ proc run*(program: Program, effectHandler: EffectHandler = nil): Value =
   case program.kind
   of TreeWalk:
     var stack = program.tw.stack.shallowRefresh()
-    evaluate(program.tw.instruction, stack, effectHandler)
+    evaluate(stack, program.tw.instruction, effectHandler)
   # XXX push initial effect handler?
   of Linear: call(program.linear, [])

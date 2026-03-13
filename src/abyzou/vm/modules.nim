@@ -29,7 +29,7 @@ proc set*(module: Module, variable: Variable, value: sink Value) {.inline.} =
   module.stack.set(variable.stackIndex, value)
 
 proc evaluateStatic*(module: Module, st: Statement): Value =
-  result = st.evaluate(module.stack)
+  result = module.stack.evaluate(st)
 
 proc addStackSlot*(module: Module, kind: VariableReferenceKind, v: Variable) =
   module.stackSlots.add(StackSlot(kind: kind, variable: v))
@@ -53,7 +53,7 @@ proc evaluateStatic*(scope: Scope, ex: Expression, bound: TypeBound = +AnyTy): V
 proc setStatic*(variable: Variable, expression: Expression) =
   let value = variable.scope.compile(expression, +variable.knownType)
   variable.knownType = value.knownType
-  let val = value.evaluate(variable.scope.module.stack)
+  let val = variable.scope.module.stack.evaluate(value)
   variable.scope.module.stack.set(variable.stackIndex, val)
   variable.evaluated = true
 

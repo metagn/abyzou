@@ -20,10 +20,10 @@ template toNegatedBool*(val: Value): bool =
 template toBool*(val: Value): bool =
   val.boolValue
 
-proc evaluate*(ins: Statement, stack: var ModuleStack, effectHandler: EffectHandler = nil): Value
+proc evaluate*(stack: var ModuleStack, ins: Statement, effectHandler: EffectHandler = nil): Value
 
 template runCheckEffect(instr: Statement, stack, effectHandler): Value =
-  let val = evaluate(instr, stack, effectHandler)
+  let val = evaluate(stack, instr, effectHandler)
   if val.kind == vEffect and (effectHandler.isNil or not effectHandler(val.effectValue.unref)):
     return val
   val
@@ -46,7 +46,7 @@ proc call*(fun: Value, args: sink Array[Value], effectHandler: EffectHandler = n
     result = fun.linearFunctionValue.program.call(args.toOpenArray(0, args.len - 1))
   else: raiseAssert("cannot call " & $fun)
 
-proc evaluate*(ins: Statement, stack: var ModuleStack, effectHandler: EffectHandler = nil): Value =
+proc evaluate*(stack: var ModuleStack, ins: Statement, effectHandler: EffectHandler = nil): Value =
   template run(instr; stack = stack; effectHandler = effectHandler): untyped =
     runCheckEffect(instr, stack, effectHandler)
   let ins = ins[]
