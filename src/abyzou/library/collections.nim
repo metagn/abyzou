@@ -24,7 +24,7 @@ module collections:
       args[0].referenceValue.unref
     result.module.set upd, toValue proc (args: openarray[Value]): Value =
       args[0].referenceValue.realRef[] = args[1]
-  # XXX [types, tuples, macros] maybe move this to compilation, or allow dynamic dispatch of .[] some other way
+  # XXX [types, tuples, macros] this breaks dynamic dispatch of .[], maybe move this to compilation
   define ".[]", funcType(StatementTy, [ContextTy, StatementTy, StatementTy]).withProperties(
     property(Meta, funcType(AnyTy, [baseType(TupleTy), Int32Ty]))
   ), toValue proc (valueArgs: openarray[Value]): Value =

@@ -13,12 +13,12 @@ module syntax:
   templ "static", 1:
     let st = context.scope.compile(args[0], +AnyTy)
     result = toValue constant(context.scope.module.evaluateStatic(st.toInstruction), st.knownType)
-  
-  # XXX [types, macros, functions] generic assignments or functions
+
+  # XXX [types, macros, functions] add syntax for generic assignments or functions
   proc makeFn(scope: Scope, arguments: seq[Expression], body: Expression,
     name: string, returnBound: TypeBound, returnBoundSet: bool): Statement =
-    let module = scope.childModule()
-    let bodyScope = module.top
+    let bodyModule = scope.childModule()
+    let bodyScope = bodyModule.top
     var fnTypeArguments = Type(kind: tyTuple, elements: newSeq[Type](arguments.len))
     for i in 0 ..< arguments.len:
       var arg = arguments[i]
@@ -36,6 +36,11 @@ module syntax:
     var v: Variable
     if name.len != 0:
       v = scope.define(name, fnType)
+    else:
+      # required for arming stack
+      v = newVariable("_lambda", fnType)
+      v.hidden = true
+      scope.define(v)
     let body = bodyScope.compile(body, returnBound)
     if not v.isNil and not returnBoundSet:
       v.knownType.nativeArgs[1] = body.knownType
@@ -53,15 +58,22 @@ module syntax:
         program: tw,
         type: fnType))
     setTypeIfBoxed(fun, fnType)
-    if not v.isNil:
-      scope.module.set(v, fun)
     var captures: seq[tuple[index, valueIndex: int]]
-    for c, ci in module.captures:
-      captures.add((ci, module.origin.module.capture(c)))
-    result = Statement(kind: skArmStack,
-      knownType: fnType,
-      armStackFunction: constant(fun, fnType),
-      armStackCaptures: captures)
+    for c, ci in bodyModule.captures:
+      captures.add((ci, bodyModule.origin.module.capture(c)))
+    result = constant(fun, fnType)
+    if not v.isNil:
+      if captures.len == 0:
+        scope.module.set(v, fun)
+      # required so that recursive functions can capture themselves in next statement:
+      result = variableSet(scope.module, v.shallowReference, result) # , source = lhs
+    if captures.len != 0:
+      result = Statement(kind: skSequence, knownType: fnType, sequence: @[
+        result, 
+        Statement(kind: skArmStack,
+          knownType: fnType,
+          armStackFunctionVariable: v.stackIndex,
+          armStackCaptures: captures)])
 
   templ "=>", 2:
     let scope = context.scope

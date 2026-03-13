@@ -95,15 +95,15 @@ proc evaluate*(ins: Instruction, stack: Stack, effectHandler: EffectHandler = ni
     result = run ins.variableSetValue
     stack.set(ins.variableSetIndex, result)
   of ArmStack:
-    result = run ins.armStackFunction
-    # XXX [function-arm, treewalk, bytecode] no refresh for linear function?
-    var fn = result.functionValue
-    # XXX [function-arm, treewalk] wtf is going on here actually, next statement should be correct position
-    #fn = fn.shallowRefresh()
+    result = stack.get(ins.armStackFunctionVariable)
+    # XXX [function-arm] missing impl for linear function?
+    let oldFn = result.functionValue
+    let newFn = oldFn.shallowRefresh()
+    result = toValue newFn
+    # XXX [function-arm, needs-testing] the following should let it arm itself
+    stack.set(ins.armStackFunctionVariable, result)
     for a, b in ins.armStackCaptures.items:
-      fn.program.stack.set(a, stack.get(b))
-    fn = fn.shallowRefresh()
-    result = toValue fn
+      newFn.program.stack.set(a, stack.get(b))
   of If:
     let cond = run ins.ifCondition
     if cond.toBool:

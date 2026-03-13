@@ -332,7 +332,7 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
         (coll: args, ind: i.int32, val: value(a))))
     let tReg = fn.newRegister()
     for t, d in s.dispatchees.items:
-      # XXX [type-arming] make sure this type arming works
+      # XXX [type-arming, needs-testing] make sure this type arming works
       let ty = funcType(AnyTy, t)
       fn.add(Instr(kind: LoadConstant, lc:
         (res: tReg, constant: fn.getConstant(toValue(ty)))))
@@ -367,13 +367,11 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
       result.value = val
     of Statement: discard
   of skArmStack:
-    let fun = value(s.armStackFunction)
-    # XXX [function-arm] comment needs to be correct
-    #fn.add(Instr(kind: RefreshStack, rfs: (fun: fun)))
+    let fun = fn.variableRegisters[s.armStackFunctionVariable]
+    fn.add(Instr(kind: RefreshStack, rfs: (fun: fun)))
     for a, b in s.armStackCaptures.items:
       fn.add(Instr(kind: ArmStack, arm:
         (fun: fun, ind: a.int32, val: fn.variableRegisters[b])))
-    fn.add(Instr(kind: RefreshStack, rfs: (fun: fun)))
     case result.kind
     of SetRegister:
       fn.add(Instr(kind: SetRegisterRegister, srr: (dest: result.register, src: fun)))

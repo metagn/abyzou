@@ -354,7 +354,7 @@ type
       variableSetIndex*: int
       variableSetValue*: Instruction
     of ArmStack:
-      armStackFunction*: Instruction
+      armStackFunctionVariable*: int
       armStackCaptures*: Array[tuple[index, valueIndex: int]]
     of If:
       ifCondition*, ifTrue*, ifFalse*: Instruction
@@ -425,8 +425,7 @@ type
       variableSetIndex*: int
       variableSetValue*: Statement
     of skArmStack:
-      armStackFunction*: Statement
-        # XXX [function-arm] needs to be a function ADDRESS
+      armStackFunctionVariable*: int
       armStackCaptures*: seq[tuple[index, valueIndex: int]]
         ## list of (variable in function stack, variable in local stack)
         ## only used for passing captures so the value is just a variable index

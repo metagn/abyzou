@@ -79,7 +79,8 @@ proc toInstruction*(st: Statement): Instruction =
     Instruction(kind: VariableSet, variableSetIndex: st.variableSetIndex,
       variableSetValue: map st.variableSetValue)
   of skArmStack:
-    Instruction(kind: ArmStack, armStackFunction: map st.armStackFunction,
+    Instruction(kind: ArmStack,
+      armStackFunctionVariable: map st.armStackFunctionVariable,
       armStackCaptures: map st.armStackCaptures)
   of skIf:
     Instruction(kind: If, ifCondition: map st.ifCond,
