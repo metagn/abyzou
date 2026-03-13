@@ -1,7 +1,8 @@
 import
   std/tables,
-  ../language/expressions,
-  ../vm/[primitives, compilation, typebasics, guesstype, valueconstr]
+  ../lang/expressions,
+  ../repr/[primitives, typebasics, guesstype, valueconstr],
+  ../vm/compilation
 
 proc define*(scope: Scope, n: string, typ: Type): Variable =
   result = newVariable(n, typ)

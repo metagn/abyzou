@@ -1,4 +1,4 @@
-import ../vm/[compilation, primitives]
+import ../repr/primitives, ../vm/compilation
 
 import ./[syntax, numbers, logic, types, collections]
 

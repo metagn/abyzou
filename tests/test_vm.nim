@@ -3,7 +3,9 @@ when (compiles do: import nimbleutils/bridge):
 else:
   import unittest
 
-import abyzou, abyzou/vm/[primitives, valueconstr, typebasics, typematch, compilation, arrays, programs]
+import abyzou,
+  abyzou/repr/[primitives, valueconstr, typebasics, arrays],
+  abyzou/vm/[typematch, compilation, programs]
 
 test "type relation":
   check {Int32Ty.match(Float32Ty).level, Float32Ty.match(Int32Ty).level} == {tmNone}

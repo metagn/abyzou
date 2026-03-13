@@ -1,7 +1,8 @@
 import
   std/[sets, tables],
   ../util/box,
-  ./[primitives, typebasics, arrays]
+  ../repr/[primitives, arrays],
+  ./typebasics
 
 proc getType*(x: Value): Type =
   template boxedType(y) =

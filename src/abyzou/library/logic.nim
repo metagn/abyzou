@@ -1,6 +1,7 @@
 import
-  ../language/[expressions, shortstring],
-  ../vm/[primitives, compilation, valueconstr, typebasics, typematch]
+  ../lang/[expressions, shortstring],
+  ../repr/[primitives, valueconstr, typebasics],
+  ../vm/[compilation, typematch]
 
 import common
 

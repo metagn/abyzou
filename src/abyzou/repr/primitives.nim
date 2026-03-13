@@ -2,7 +2,7 @@ import
   std/[tables, sets, hashes],
   ../util/box,
   ./[arrays, pointertag, ids],
-  ../language/expressions
+  ../lang/expressions
 
 export box, unbox
 template toRef*[T](x: T): ref T =

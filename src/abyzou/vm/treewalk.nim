@@ -1,6 +1,7 @@
 import
   std/[sets, tables],
-  ./[primitives, arrays, valueconstr, checktype, typebasics]
+  ../repr/[primitives, arrays, valueconstr, typebasics],
+  ./checktype
 
 proc get*(stack: Stack, index: int): lent Value {.inline.} =
   stack.stack[index]
