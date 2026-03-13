@@ -29,7 +29,7 @@ module collections:
     property(Meta, funcType(AnyTy, [baseType(TupleTy), Int32Ty]))
   ), toValue proc (valueArgs: openarray[Value]): Value =
     let context = valueArgs[0].contextValue.value
-    let index = context.scope.module.evaluateStatic(valueArgs[2].statementValue.toInstruction)
+    let index = context.scope.module.evaluateStatic(valueArgs[2].statementValue)
     let nthType = valueArgs[1].statementValue.knownType.nth(index.int32Value)
     result = toValue Statement(kind: skGetIndex,
       knownType: nthType,

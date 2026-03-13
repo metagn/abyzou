@@ -288,7 +288,7 @@ type
     stack*: Stack
       ## persistent stack
       ## gets shallow copied when function is run
-    instruction*: Instruction
+    instruction*: Statement
 
   # XXX [functions] add function names to objects but then native function is unnamed
 
@@ -308,80 +308,13 @@ type
     # value first just to copy BoxedValue
     program*: LinearProgram
     `type`*: Type
-
-  InstructionKind* = enum
-    NoOp
-    Constant
-    FunctionCall, Dispatch
-    Sequence
-    # stack
-    VariableGet, VariableSet
-    ArmStack
-    # goto
-    If, While, DoUntil
-    # effect, can emulate goto
-    EmitEffect, HandleEffect
-    # collection
-    BuildTuple, BuildList, BuildSet, BuildTable
-    GetIndex, SetIndex
-    # binary
+  BinaryInstructionKind* = enum
     AddInt, SubInt, MulInt, DivInt
     AddFloat, SubFloat, MulFloat, DivFloat
     CheckType
-    # unary
-    NegInt, NegFloat
-  
-  BinaryInstructionKind* = range[AddInt .. CheckType]
-  UnaryInstructionKind* = range[NegInt .. NegFloat]
 
-  InstructionObj* = object ## compact version of Statement
-    # XXX [treewalk] maybe remove in favor of just statements?
-    case kind*: InstructionKind
-    of NoOp: discard
-    of Constant:
-      constantValue*: Value
-    of FunctionCall:
-      function*: Instruction # evaluates to TreeWalkProgram or native function
-      arguments*: Array[Instruction]
-    of Dispatch:
-      dispatchFunctions*: Array[(Array[Type], Instruction)]
-      dispatchArguments*: Array[Instruction]
-    of Sequence:
-      sequence*: Array[Instruction]
-    of VariableGet:
-      variableGetIndex*: int
-    of VariableSet:
-      variableSetIndex*: int
-      variableSetValue*: Instruction
-    of ArmStack:
-      armStackFunctionVariable*: int
-      armStackCaptures*: Array[tuple[index, valueIndex: int]]
-    of If:
-      ifCondition*, ifTrue*, ifFalse*: Instruction
-    of While:
-      whileCondition*, whileTrue*: Instruction
-    of DoUntil:
-      doUntilCondition*, doUntilTrue*: Instruction
-    of EmitEffect:
-      effect*: Instruction
-    of HandleEffect:
-      effectHandler*, effectEmitter*: Instruction
-    of BuildTuple, BuildList, BuildSet:
-      elements*: Array[Instruction]
-    of BuildTable:
-      entries*: Array[tuple[key, value: Instruction]]
-    of GetIndex:
-      getIndexAddress*: Instruction
-      getIndex*: int
-    of SetIndex:
-      setIndexAddress*: Instruction
-      setIndex*: int
-      setIndexValue*: Instruction
-    of low(UnaryInstructionKind) .. high(UnaryInstructionKind):
-      unary*: Instruction
-    of low(BinaryInstructionKind) .. high(BinaryInstructionKind):
-      binary1*, binary2*: Instruction
-  Instruction* = ref InstructionObj
+  UnaryInstructionKind* = enum
+    NegInt, NegFloat
 
   StatementKind* = enum
     skNone

@@ -35,9 +35,9 @@ template withStack*(module: Module, body) =
   body
   fillStack(module, stack)
 
-proc evaluateStatic*(module: Module, instr: Instruction): Value =
+proc evaluateStatic*(module: Module, st: Statement): Value =
   module.withStack:
-    result = instr.evaluate(stack)
+    result = st.evaluate(stack)
 
 proc define*(scope: Scope, variable: Variable, kind = Local) =
   variable.scope = scope
@@ -49,72 +49,6 @@ proc define*(scope: Scope, variable: Variable, kind = Local) =
 proc set*(module: Module, variable: Variable, value: sink Value) =
   assert variable.scope.module == module
   module.stackSlots[variable.stackIndex].value = value
-
-proc toInstruction*(st: Statement): Instruction =
-  template map[T](s: T): T =
-    s
-  template map(s: Statement): Instruction =
-    s.toInstruction
-  template map[T, U](s: (T, U)): untyped =
-    (map s[0], map s[1])
-  template map(s: seq): Array =
-    var arr = initArray[typeof map s[0]](s.len)
-    for i in 0 ..< arr.len:
-      arr[i] = map s[i]
-    arr
-  result = case st.kind
-  of skNone: Instruction(kind: NoOp)
-  of skConstant: Instruction(kind: Constant, constantValue: st.constant)
-  of skFunctionCall:
-    Instruction(kind: FunctionCall, function: map st.callee,
-      arguments: map st.arguments)
-  of skDispatch:
-    Instruction(kind: Dispatch,
-      dispatchFunctions: map st.dispatchees,
-      dispatchArguments: map st.dispatchArguments)
-  of skSequence: Instruction(kind: Sequence, sequence: map st.sequence)
-  of skVariableGet:
-    Instruction(kind: VariableGet, variableGetIndex: st.variableGetIndex)
-  of skVariableSet:
-    Instruction(kind: VariableSet, variableSetIndex: st.variableSetIndex,
-      variableSetValue: map st.variableSetValue)
-  of skArmStack:
-    Instruction(kind: ArmStack,
-      armStackFunctionVariable: map st.armStackFunctionVariable,
-      armStackCaptures: map st.armStackCaptures)
-  of skIf:
-    Instruction(kind: If, ifCondition: map st.ifCond,
-      ifTrue: map st.ifTrue, ifFalse: map st.ifFalse)
-  of skWhile:
-    Instruction(kind: While, whileCondition: map st.whileCond,
-      whileTrue: map st.whileBody)
-  of skDoUntil:
-    Instruction(kind: DoUntil, doUntilCondition: map st.doUntilCond,
-      doUntilTrue: map st.doUntilBody)
-  of skEmitEffect:
-    Instruction(kind: EmitEffect, effect: map st.effect)
-  of skHandleEffect:
-    Instruction(kind: HandleEffect, effectHandler: map st.effectHandler,
-      effectEmitter: map st.effectBody)
-  of skTuple:
-    Instruction(kind: BuildTuple, elements: map st.elements)
-  of skList:
-    Instruction(kind: BuildList, elements: map st.elements)
-  of skSet:
-    Instruction(kind: BuildSet, elements: map st.elements)
-  of skTable:
-    Instruction(kind: BuildTable, entries: map st.entries)
-  of skGetIndex:
-    Instruction(kind: GetIndex, getIndexAddress: map st.getIndexAddress,
-      getIndex: st.getIndex)
-  of skSetIndex:
-    Instruction(kind: SetIndex, setIndexAddress: map st.setIndexAddress,
-      setIndex: st.setIndex,
-      setIndexValue: map st.setIndexValue)
-  of skUnaryInstruction:
-    Instruction(kind: st.unaryInstructionKind, unary: map st.unary)
-  of skBinaryInstruction:
-    Instruction(kind: st.binaryInstructionKind, binary1: map st.binary1, binary2: map st.binary2)
 
 type
   CompileError* = object of CatchableError
@@ -139,13 +73,13 @@ type
 proc compile*(scope: Scope, ex: Expression, bound: TypeBound): Statement
 
 proc evaluateStatic*(scope: Scope, ex: Expression, bound: TypeBound = +AnyTy): Value =
-  scope.module.evaluateStatic(scope.compile(ex, bound).toInstruction)
+  scope.module.evaluateStatic(scope.compile(ex, bound))
 
 proc setStatic*(variable: Variable, expression: Expression) =
   let value = variable.scope.compile(expression, +variable.knownType)
   variable.knownType = value.knownType
   variable.scope.module.withStack:
-    stack.set(variable.stackIndex, value.toInstruction.evaluate(stack))
+    stack.set(variable.stackIndex, value.evaluate(stack))
   variable.evaluated = true
 
 proc getType*(variable: Variable): Type =
@@ -415,7 +349,7 @@ proc compileMetaCall*(scope: Scope, name: string, ex: Expression, bound: TypeBou
           arguments[i + 1] = constant(copy ex.arguments[i], ExpressionTy)
       let call = Statement(kind: skFunctionCall,
         callee: variableGet(scope.module, meta),
-        arguments: arguments).toInstruction
+        arguments: arguments)
       result = scope.module.evaluateStatic(call).statementValue
     elif subMetas.len != 0:
       # XXX [typematch, macros] sub meta dispatch, needs better output and described semantics
@@ -461,7 +395,7 @@ proc compileMetaCall*(scope: Scope, name: string, ex: Expression, bound: TypeBou
         for i, a in arguments: argumentStatement[i] = constant(a, a.getType)
         let call = Statement(kind: skFunctionCall,
           callee: variableGet(scope.module, d),
-          arguments: argumentStatement).toInstruction
+          arguments: argumentStatement)
         let body = scope.module.evaluateStatic(call).statementValue
         var operands: seq[Statement]
         for i, checkType in variableCheckTypes:
@@ -734,5 +668,5 @@ proc compile*(ex: Expression, imports: seq[Scope], bound: TypeBound = +AnyTy): P
     result = Program(kind: Linear, linear: lc.toFunction())
   else:
     result = Program(kind: TreeWalk, tw: TreeWalkProgram(
-      instruction: body.toInstruction,
+      instruction: body,#copy(body),
       stack: makeStack(module)))

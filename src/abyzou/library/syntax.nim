@@ -12,7 +12,7 @@ module syntax:
     result = toValue sc.compile(args[0], +AnyTy)
   templ "static", 1:
     let st = context.scope.compile(args[0], +AnyTy)
-    result = toValue constant(context.scope.module.evaluateStatic(st.toInstruction), st.knownType)
+    result = toValue constant(context.scope.module.evaluateStatic(st), st.knownType)
 
   # XXX [types, macros, functions] add syntax for generic assignments or functions
   proc makeFn(scope: Scope, arguments: seq[Expression], body: Expression,
@@ -51,9 +51,10 @@ module syntax:
         program: lc.toFunction(),
         type: fnType))
     else:
+      let body2 = [body][0]#copy(body) # weird orc bug workaround
       let tw = TreeWalkProgram(
         stack: bodyScope.module.makeStack(),
-        instruction: body.toInstruction)
+        instruction: body2)
       fun = toValue(TreeWalkFunction(
         program: tw,
         type: fnType))
