@@ -16,7 +16,7 @@ proc call*(function: Program, args: openarray[Value], effectHandler: EffectHandl
 proc run*(program: Program, effectHandler: EffectHandler = nil): Value =
   case program.kind
   of TreeWalk:
-    var stack = program.tw.stack
+    var stack = program.tw.stack.shallowRefresh()
     evaluate(program.tw.instruction, stack, effectHandler)
   # XXX push initial effect handler?
   of Linear: call(program.linear, [])

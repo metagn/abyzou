@@ -53,8 +53,8 @@ proc evaluateStatic*(scope: Scope, ex: Expression, bound: TypeBound = +AnyTy): V
 proc setStatic*(variable: Variable, expression: Expression) =
   let value = variable.scope.compile(expression, +variable.knownType)
   variable.knownType = value.knownType
-  let module = variable.scope.module
-  module.stack.set(variable.stackIndex, value.evaluate(module.stack))
+  let val = value.evaluate(variable.scope.module.stack)
+  variable.scope.module.stack.set(variable.stackIndex, val)
   variable.evaluated = true
 
 proc getType*(variable: Variable): Type =

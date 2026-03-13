@@ -276,8 +276,16 @@ type
     boundType*: Type
     variance*: Variance
 
-  ModuleStack* = object
-    stack*: seq[Value]
+  ModuleStackSeq* = seq[Value]
+  ModuleStackImplObj* = object
+    stack*: ModuleStackSeq
+  ModuleStackImplSeq* = distinct ModuleStackSeq
+  ModuleStack* = (
+    when defined(gcDestructors):
+      ModuleStackImplObj
+    else:
+      ModuleStackImplSeq
+  )
 
   NativeFunction* = #[ref ]#object
     # value first just to copy BoxedValue
@@ -457,12 +465,22 @@ template tupleValue*(v: Value): untyped =
 # for now clashes with `module` macro for libraries
 #proc module*(c: Context): Module {.inline.} = c.scope.module
 
-proc get*(stack: ModuleStack, index: int): lent Value {.inline.} =
-  stack.stack[index]
-proc getMut*(stack: var ModuleStack, index: int): var Value {.inline.} =
-  stack.stack[index]
-proc set*(stack: var ModuleStack, index: int, value: sink Value) {.inline.} =
-  stack.stack[index] = value
+when ModuleStack is ModuleStackImplSeq:
+  proc stack*(st: ModuleStack): ModuleStackSeq {.inline.} = ModuleStackSeq(st)
+  proc stack*(st: var ModuleStack): var ModuleStackSeq {.inline.} = ModuleStackSeq(st)
+  template get*(st: ModuleStack, index: int): untyped =
+    ModuleStackSeq(st)[index]
+  template getMut*(st: var ModuleStack, index: int): untyped =
+    ModuleStackSeq(st)[index]
+  template set*(st: var ModuleStack, index: int, value: Value) =
+    ModuleStackSeq(st)[index] = value
+else:
+  proc get*(stack: ModuleStack, index: int): lent Value {.inline.} =
+    stack.stack[index]
+  proc getMut*(stack: var ModuleStack, index: int): var Value {.inline.} =
+    stack.stack[index]
+  proc set*(stack: var ModuleStack, index: int, value: sink Value) {.inline.} =
+    stack.stack[index] = value
 
 import ./primitiveprocs
 export primitiveprocs
