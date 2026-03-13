@@ -402,6 +402,7 @@ type
     genericParams*: seq[TypeParameter]
       # XXX [types] maybe make this a tuple type too with signature for named and default generic params
     lazyExpression*: Expression
+      # XXX [modules] actually use this for easy mutual recursion
     evaluated*: bool
 
   StackSlot* = object
