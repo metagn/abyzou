@@ -127,6 +127,7 @@ proc `$`*(value: Value): string =
   of vStatement: $value.statementValue[]
   of vContext: $value.contextValue.value
   of vModule: $value.moduleValue
+  of vModuleStack: "<module stack>"
 
 proc `$`*(p: TypeBase): string {.inline.} = p.name
 

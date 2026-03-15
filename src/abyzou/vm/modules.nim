@@ -59,7 +59,9 @@ proc getType*(variable: Variable): Type =
   variable.knownType
 
 proc shallowReference*(v: Variable, `type`: Type = v.getType): VariableReference {.inline.} =
-  VariableReference(variable: v, type: `type`, kind: Local)
+  let kind = v.scope.module.stackSlots[v.stackIndex].kind
+  assert kind in {Local, Argument, Pinned}
+  VariableReference(variable: v, type: `type`, kind: kind)
 
 proc capture*(c: Module, v: Variable): int =
   if v.scope.module == c:
@@ -140,6 +142,8 @@ proc captureModule*(c: Module, m: Module): int =
     if m == c:
       let v = newVariable("_this", ModuleTy)
       v.hidden = true
+      v.scope = c.top # ???
+      v.stackIndex = c.stackSlots.len # ???
       c.addStackSlot(This, v, toValue(m))
     else:
       var sup = -1
@@ -168,7 +172,7 @@ proc variableGet*(c: Module, r: VariableReference): Statement =
     result = Statement(kind: skAddressGet,
       addressGetModule: Statement(kind: skVariableGet,
         variableGetIndex: c.captureModule(r.variable.scope.module),
-        knownType: ModuleTy),
+        knownType: ModuleStackTy),
       addressGetIndex: r.variable.stackIndex,
       knownType: t)
 
@@ -184,7 +188,7 @@ proc variableSet*(c: Module, r: VariableReference, value: Statement, source: Exp
     result = Statement(kind: skAddressSet,
       addressSetModule: Statement(kind: skVariableGet,
         variableGetIndex: c.captureModule(r.variable.scope.module),
-        knownType: ModuleTy),
+        knownType: ModuleStackTy),
       addressSetIndex: r.variable.stackIndex,
       addressSetValue: value,
       knownType: t)

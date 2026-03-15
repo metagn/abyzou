@@ -51,6 +51,7 @@ type
     vStatement
     vModule
       # XXX [modules, memory] implement accessing modules and module variables
+    vModuleStack
     vBoxed
       ## boxed version of unboxed values, used for type info
     vInt64, vUint64, vFloat64
@@ -82,7 +83,7 @@ type
     tyString = "String",
     tySet = "Set",
     tyTable = "Table",
-    tyExpression = "Expression", tyStatement = "Statement", tyContext = "Context", tyModule = "Module",
+    tyExpression = "Expression", tyStatement = "Statement", tyContext = "Context", tyModule = "Module", tyModuleStack = "ModuleStack"
     tyType = "Type",
     # typeclass
     tyAny = "Any", tyAll = "All", ## top and bottom types
@@ -111,7 +112,7 @@ const
   nativeTypes* = {tyNoneValue..tyType, tyTupleConstructor}
     # XXX [types] to consider later: tuple, any all, union intersection not, somevalue
     # typeclasses look a little annoying with normalization
-  noArgNativeTypes* = {tyNoneValue..tyFloat64, tyString, tyExpression, tyStatement, tyContext, tyModule}
+  noArgNativeTypes* = {tyNoneValue..tyFloat64, tyString, tyExpression, tyStatement, tyContext, tyModule, tyModuleStack}
   argNativeTypes* = nativeTypes - noArgNativeTypes
 
 type NativeType* = TypeKind # since it can't be a range
@@ -179,6 +180,8 @@ type
       contextValue*: BoxedValue[Context]
     of vModule:
       moduleValue*: Module
+    of vModuleStack:
+      moduleStackValue*: ModuleStack
   
   PointerTaggedValue* = distinct (
     when pointerTaggable:
@@ -310,6 +313,8 @@ type
 
   LinearProgram* = object
     registerCount*: int
+    heapSize*: int
+    thisIndex*: int
     argPositions*: Array[int] ## last is result
     constants*: Array[Value] # XXX [serialization] serialize values
     jumpLocations*: Array[int]
@@ -493,6 +498,13 @@ when ModuleStack is distinct:
     ModuleStackSeq(st)[index]
   template set*(st: var ModuleStack, index: int, value: Value) =
     ModuleStackSeq(st)[index] = value
+elif ModuleStack is ref:
+  proc get*(stack: ModuleStack, index: int): lent Value {.inline.} =
+    stack.stack[index]
+  proc getMut*(stack: ModuleStack, index: int): var Value {.inline.} =
+    stack.stack[index]
+  proc set*(stack: ModuleStack, index: int, value: sink Value) {.inline.} =
+    stack.stack[index] = value
 else:
   proc get*(stack: ModuleStack, index: int): lent Value {.inline.} =
     stack.stack[index]

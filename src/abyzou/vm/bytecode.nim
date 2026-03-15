@@ -18,7 +18,7 @@ when not declared(EffectHandler):
   import ./treewalk
 {.pop.}
 
-proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
+proc runOnStack*(lf: LinearProgram, stack: var Array[Value],  heap: ModuleStack, effectPos: int) =
   var registers = move stack
   defer: stack = move registers
   template put(reg: Register, val: Value) =
@@ -100,14 +100,14 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
       mov instr.srr.src, instr.srr.dest
     of LoadAddress:
       read instr.la
-      let module = unboxStripType get instr.la.module
-      assert module.kind == vModule
-      put instr.la.res, module.moduleValue.stack.get(instr.la.ind)
+      let heap = unboxStripType get instr.la.heap
+      assert heap.kind == vModuleStack
+      put instr.la.res, heap.moduleStackValue.get(instr.la.ind)
     of SetAddress:
       read instr.sa
-      let module = unboxStripType get instr.sa.module
-      assert module.kind == vModule
-      module.moduleValue.stack.set(instr.sa.ind, get instr.sa.val)
+      let heap = unboxStripType get instr.sa.heap
+      assert heap.kind == vModuleStack, $heap
+      heap.moduleStackValue.set(instr.sa.ind, get instr.sa.val)
     of NullaryCall:
       read instr.ncall
       let fn {.cursor.} = unboxStripType get instr.ncall.callee
@@ -421,7 +421,14 @@ proc call*(lf: LinearProgram, args: openarray[Value]): Value =
   for i in 0 ..< args.len:
     registers[lf.argPositions[i]] = args[i]
   let resultPos = lf.argPositions[args.len]
+
+  var heap: ModuleStack = nil
+  if lf.heapSize > 0 or lf.thisIndex >= 0:
+    assert lf.heapSize > 0 and lf.thisIndex >= 0, $(lf.heapSize, lf.thisIndex)
+    heap = ModuleStack()
+    heap.stack.setLen(lf.heapSize)
+    registers[lf.thisIndex] = toValue(heap)
   
-  runOnStack(lf, registers, resultPos)
+  runOnStack(lf, registers, heap, resultPos)
 
   result = registers[resultPos]

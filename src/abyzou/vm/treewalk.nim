@@ -39,14 +39,14 @@ proc call*(fun: TreeWalkProgram, args: sink Array[Value], effectHandler: EffectH
   var newStack = fun.stack.shallowRefresh()
   for i in 0 ..< args.len:
     newStack.set(i, args[i])
-  #if fun.thisIndex >= 0:
-  #  newStack.set(fun.thisIndex, fun)
+  if fun.thisIndex >= 0:
+    newStack.set(fun.thisIndex, toValue newStack)
   result = runCheckEffect(fun.instruction, newStack, effectHandler)
 
 proc run*(fun: TreeWalkProgram, effectHandler: EffectHandler = nil): Value {.inline.} =
   var newStack = fun.stack.shallowRefresh()
-  #if fun.thisIndex >= 0:
-  #  newStack.set(fun.thisIndex, fun)
+  if fun.thisIndex >= 0:
+    newStack.set(fun.thisIndex, toValue newStack)
   result = runCheckEffect(fun.instruction, newStack, effectHandler)
 
 import ./bytecode
@@ -99,13 +99,13 @@ proc evaluate*(stack: var ModuleStack, ins: Statement, effectHandler: EffectHand
     stack.set(ins.variableSetIndex, result)
   of skAddressGet:
     let m = unboxStripType run ins.addressGetModule
-    assert m.kind == vModule
-    result = m.moduleValue.stack.get(ins.addressGetIndex)
+    assert m.kind == vModuleStack
+    result = m.moduleStackValue.get(ins.addressGetIndex)
   of skAddressSet:
     let m = unboxStripType run ins.addressSetModule
-    assert m.kind == vModule
+    assert m.kind == vModuleStack
     result = run ins.addressSetValue
-    m.moduleValue.stack.set(ins.addressSetIndex, result)
+    m.moduleStackValue.set(ins.addressSetIndex, result)
   of skArmStack:
     result = stack.get(ins.armStackFunctionVariable)
     # XXX [function-arm] missing impl for linear function?

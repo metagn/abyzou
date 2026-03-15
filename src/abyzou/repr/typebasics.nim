@@ -74,7 +74,7 @@ let nativeTypeArgs*: array[NativeType, seq[TypeBound]] = [
   tyString: @[],
   tySet: @[+AnyTy],
   tyTable: @[+AnyTy, +AnyTy],
-  tyExpression: @[], tyStatement: @[], tyContext: @[], tyModule: @[],
+  tyExpression: @[], tyStatement: @[], tyContext: @[], tyModule: @[], tyModuleStack: @[],
   tyType: @[+AnyTy],
   # typeclass
   tyAny: @[], tyAll: @[], # - not native
@@ -101,6 +101,7 @@ nativeAtomicType Expression
 nativeAtomicType Statement
 nativeAtomicType Context
 nativeAtomicType Module
+nativeAtomicType ModuleStack
 nativeType Reference, [+AnyTy]
 nativeType List, [+AnyTy]
 nativeType Set, [+AnyTy]
@@ -181,7 +182,7 @@ const definiteTypeLengths*: array[TypeKind, int] = [
   tyString: 0,
   tySet: 1,
   tyTable: 2,
-  tyExpression: 0, tyStatement: 0, tyContext: 0, tyModule: 0,
+  tyExpression: 0, tyStatement: 0, tyContext: 0, tyModule: 0, tyModuleStack: 0,
   tyType: 1,
   # typeclass
   tyAny: 0, tyAll: 0,

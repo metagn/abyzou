@@ -123,6 +123,15 @@ a.getter.()""": toValue(3),
     """
 foo() =
   x = ref 1
+  (getter: (() => unref x),
+  setter: ((y: Int) => update(x, y))) 
+a = foo()
+_ = a.setter.(3)
+b = foo()
+[a.getter.(), b.getter.()]""": toValue(@[toValue(3), toValue(1)]),
+    """
+foo() =
+  x = ref 1
   (getter: (
     () => unref x),
   setter: (
@@ -139,15 +148,6 @@ static
   a = foo()
   _ = a.setter.(3)
 a.getter.()""": toValue(3),
-    """
-foo() =
-  x = ref 1
-  (getter: (() => unref x),
-  setter: ((y: Int) => update(x, y))) 
-a = foo()
-_ = a.setter.(3)
-b = foo()
-[a.getter.(), b.getter.()]""": toValue(@[toValue(3), toValue(1)]),
     """
 foo() =
   x = ref 1
@@ -172,7 +172,6 @@ static
 c = foo()
 [a.getter.(), b.getter.(), c.getter.()]""": toValue(@[toValue(3), toValue(1), toValue(1)]),
 
-#[
     # closures with pinned captures (mutable):
     "@a = 1; foo() = a; [foo(), (a = 2; foo()), foo()]": toValue(@[toValue(1), toValue(2), toValue(2)]),
     "@a = 1; foo() = (@b = 2; bar() = (@c = 3; (a, b, c)); bar()); foo()": toValue(toArray([toValue(1), toValue(2), toValue(3)])),
@@ -184,6 +183,16 @@ foo() =
 a = foo()
 _ = a.setter.(3)
 a.getter.()""": toValue(3),
+    """
+foo() =
+  @x = 1
+  (getter: (() => x),
+  setter: ((y: Int) => x = y)) 
+a = foo()
+_ = a.setter.(3)
+b = foo()
+[a.getter.(), b.getter.()]""": toValue(@[toValue(3), toValue(1)]),
+#[
     """
 foo() =
   @x = 1
@@ -203,15 +212,6 @@ static
   a = foo()
   _ = a.setter.(3)
 a.getter.()""": toValue(3),
-    """
-foo() =
-  @x = 1
-  (getter: (() => x),
-  setter: ((y: Int) => x = y)) 
-a = foo()
-_ = a.setter.(3)
-b = foo()
-[a.getter.(), b.getter.()]""": toValue(@[toValue(3), toValue(1)]),
     """
 foo() =
   @x = 1

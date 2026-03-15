@@ -46,9 +46,9 @@ type
     of SetRegisterRegister:
       srr*: tuple[dest, src: Register]
     of LoadAddress:
-      la*: tuple[res, module: Register, ind: int32]
+      la*: tuple[res, heap: Register, ind: int32]
     of SetAddress:
-      sa*: tuple[module: Register, ind: int32, val: Register]
+      sa*: tuple[heap: Register, ind: int32, val: Register]
     of NullaryCall:
       ncall*: tuple[res, callee: Register]
     of UnaryCall:
@@ -104,6 +104,8 @@ type
     instructions*: seq[LinearInstruction]
     byteCount*: int
     registerCount*: int
+    heapSize*: int
+    thisIndex*: int
     jumpLocationCount*: int
     jumpLocationByteIndex*: seq[int]
     constants*: seq[Value] # first are always variable default values
@@ -381,13 +383,13 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
     fn.add(Instr(kind: LoadAddress, la:
       # XXX [bytecode, modules, memory] should this really use another register? as opposed to directly using the address every time
       (res: resultRegister(fn, result),
-        module: value(s.addressGetModule),
+        heap: value(s.addressGetModule),
         ind: s.addressGetIndex.int32)))
   of skAddressSet:
     # XXX [bytecode, modules, memory] should this really use another register? as opposed to directly using the address every time
     let val = value(s.addressSetValue)
     fn.add(Instr(kind: SetAddress, sa:
-      (module: value(s.addressSetModule),
+      (heap: value(s.addressSetModule),
         ind: s.addressSetIndex.int32,
         val: val)))
     case resultKind
@@ -526,20 +528,41 @@ proc createLinearContext*(module: Module): LinearContext =
   result = LinearContext()
   result.variableRegisters.newSeq(module.stackSlots.len + 1)
   result.constants.newSeq(module.stackSlots.len)
+  result.thisIndex = module.moduleCaptures.getOrDefault(module, -1)
   for i in 0 ..< module.stackSlots.len:
     let reg = result.newRegister()
     result.variableRegisters[i] = reg
-    if module.stackSlots[i].kind == Local:
+    var forceSetDefault = false
+    let kind = module.stackSlots[i].kind
+    case kind
+    of Local:
       # enforce this so that other modules can easily access it:
       doAssert reg.int == module.stackSlots[i].variable.stackIndex, $(i, reg.int, module.stackSlots[i].variable.stackIndex)
-    if module.stackSlots[i].kind == Argument:
+    of Argument:
       result.argRegisters.add(reg)
+    of StaticCapture:
+      forceSetDefault = true
+    of Pinned:
+      # enforce this so that other modules can easily access it:
+      doAssert reg.int == module.stackSlots[i].variable.stackIndex, $(i, reg.int, module.stackSlots[i].variable.stackIndex)
+      if i + 1 > result.heapSize:
+        result.heapSize = i + 1
+      doAssert result.thisIndex >= 0
+    of This:
+      # enforce this so that other modules can easily access it:
+      doAssert reg.int == module.stackSlots[i].variable.stackIndex, $(i, reg.int, module.stackSlots[i].variable.stackIndex)
+      doAssert result.thisIndex == reg.int
+      continue # do not set default value
+    else: discard
     # this might lose performance but is needed for capture arming
     let defaultValue = module.stack.get(i)
-    if defaultValue.kind != vNone or module.stackSlots[i].kind == StaticCapture:
+    if forceSetDefault or defaultValue.kind != vNone:
       result.constants[i] = defaultValue
       result.add(LinearInstruction(kind: LoadConstant, lc:
         (res: reg, constant: Constant(i))))
+      if kind == Pinned:
+        result.add(LinearInstruction(kind: SetAddress, sa:
+          (heap: Register(result.thisIndex), ind: i.int32, val: reg)))
   result.argRegisters.add(result.newRegister()) # result value
 
 proc linear*(module: Module, body: Statement): LinearContext =
@@ -553,6 +576,8 @@ proc toFunction*(lc: LinearContext): LinearProgram =
     ap[i] = lc.argRegisters[i].int
   result = LinearProgram(
     registerCount: lc.registerCount,
+    heapSize: lc.heapSize,
+    thisIndex: lc.thisIndex,
     argPositions: ap,
     constants: toArray(lc.constants),
     jumpLocations: toArray(lc.jumpLocationByteIndex),

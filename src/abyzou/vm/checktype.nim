@@ -83,6 +83,7 @@ proc checkType*(value: Value, t: Type): bool =
   of tyStatement: value.kind == vStatement
   of tyContext: value.kind == vContext
   of tyModule: value.kind == vModule
+  of tyModuleStack: value.kind == vModuleStack
   of tyAny: true
   of tyAll, tyNoType: false
   of tyUnion:
