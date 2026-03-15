@@ -133,7 +133,7 @@ module syntax:
       let value = compile(scope, rhs, bound)
       let v = newVariable(nameInfo.name, if typeSet: bound.boundType else: value.knownType)
       scope.define(v, nameInfo.kind)
-      result = toValue variableSet(scope.module, VariableReference(variable: v, type: v.knownType, kind: nameInfo.kind), value, source = lhs)
+      result = toValue variableSet(scope.module, v.shallowReference, value, source = lhs)
     elif lhs.kind in CallKinds:
       result = toValue makeFn(scope, lhs.arguments, rhs, $lhs.address, bound, typeSet)
     else: assert false, $lhs
