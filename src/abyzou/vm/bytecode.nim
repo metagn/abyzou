@@ -18,7 +18,7 @@ when not declared(EffectHandler):
   import ./treewalk
 {.pop.}
 
-proc runOnStack*(lf: LinearProgram, stack: var Array[Value],  heap: ModuleStack, effectPos: int) =
+proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
   var registers = move stack
   defer: stack = move registers
   template put(reg: Register, val: Value) =
@@ -101,13 +101,13 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value],  heap: ModuleStack,
     of LoadAddress:
       read instr.la
       let heap = unboxStripType get instr.la.heap
-      assert heap.kind == vModuleStack
-      put instr.la.res, heap.moduleStackValue.get(instr.la.ind)
+      assert heap.kind == vMemory
+      put instr.la.res, heap.memoryValue.get(instr.la.ind)
     of SetAddress:
       read instr.sa
       let heap = unboxStripType get instr.sa.heap
-      assert heap.kind == vModuleStack, $heap
-      heap.moduleStackValue.set(instr.sa.ind, get instr.sa.val)
+      assert heap.kind == vMemory, $heap
+      heap.memoryValue.set(instr.sa.ind, get instr.sa.val)
     of NullaryCall:
       read instr.ncall
       let fn {.cursor.} = unboxStripType get instr.ncall.callee
@@ -227,7 +227,7 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value],  heap: ModuleStack,
       let fn = get(instr.arm.fun)
       case fn.kind
       of vFunction:
-        fn.functionValue.program.stack.set(instr.arm.ind, get(instr.arm.val))
+        fn.functionValue.program.memory.set(instr.arm.ind, get(instr.arm.val))
       of vLinearFunction:
         fn.linearFunctionValue.program.constants[instr.arm.ind] = get instr.arm.val
       else: raiseAssert("cannot arm stack of " & $fn)
@@ -422,13 +422,13 @@ proc call*(lf: LinearProgram, args: openarray[Value]): Value =
     registers[lf.argPositions[i]] = args[i]
   let resultPos = lf.argPositions[args.len]
 
-  var heap: ModuleStack = nil
+  var heap: Memory = nil
   if lf.heapSize > 0 or lf.thisIndex >= 0:
     assert lf.heapSize > 0 and lf.thisIndex >= 0, $(lf.heapSize, lf.thisIndex)
-    heap = ModuleStack()
+    heap = Memory()
     heap.stack.setLen(lf.heapSize)
     registers[lf.thisIndex] = toValue(heap)
   
-  runOnStack(lf, registers, heap, resultPos)
+  runOnStack(lf, registers, resultPos)
 
   result = registers[resultPos]

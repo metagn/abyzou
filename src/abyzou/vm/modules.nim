@@ -10,7 +10,7 @@ proc newModule*(parent: Scope = nil, imports: seq[Scope] = @[]): Module =
   # XXX [modules] use module registry
   result = Module(id: newModuleId(), origin: parent)
   result.top = Scope(module: result, imports: imports)
-  result.stack = ModuleStack()
+  result.memory = Memory()
 
 proc childModule*(scope: Scope): Module =
   result = newModule(parent = scope)
@@ -20,32 +20,32 @@ proc childScope*(scope: Scope): Scope =
 
 proc get*(module: Module, variable: Variable): Value {.inline.} =
   assert variable.scope.module == module
-  module.stack.get(variable.stackIndex)
+  module.memory.get(variable.stackIndex)
 
 proc getMut*(module: Module, variable: Variable): var Value {.inline.} =
   assert variable.scope.module == module
-  module.stack.getMut(variable.stackIndex)
+  module.memory.getMut(variable.stackIndex)
 
 proc set*(module: Module, variable: Variable, value: sink Value) {.inline.} =
   assert variable.scope.module == module
-  module.stack.set(variable.stackIndex, value)
+  module.memory.set(variable.stackIndex, value)
 
 proc evaluateStatic*(module: Module, st: Statement): Value =
-  result = module.stack.evaluate(st)
+  result = module.memory.evaluate(st)
 
 proc addStackSlot*(module: Module, kind: VariableReferenceKind, v: Variable) =
-  module.stackSlots.add(StackSlot(kind: kind, variable: v))
-  if module.stack.stack.len < module.stackSlots.len:
-    module.stack.stack.setLen(module.stackSlots.len)
+  module.memorySlots.add(StackSlot(kind: kind, variable: v))
+  if module.memory.stack.len < module.memorySlots.len:
+    module.memory.stack.setLen(module.memorySlots.len)
 
 proc addStackSlot*(module: Module, kind: VariableReferenceKind, v: Variable, value: Value) =
-  let i = module.stackSlots.len
+  let i = module.memorySlots.len
   module.addStackSlot(kind, v)
-  module.stack.set(i, value)
+  module.memory.set(i, value)
 
 proc define*(scope: Scope, variable: Variable, kind = Local) =
   variable.scope = scope
-  variable.stackIndex = scope.module.stackSlots.len
+  variable.stackIndex = scope.module.memorySlots.len
   scope.module.addStackSlot(kind, variable)
   scope.variables.add(variable)
 
@@ -59,7 +59,7 @@ proc getType*(variable: Variable): Type =
   variable.knownType
 
 proc shallowReference*(v: Variable, `type`: Type = v.getType): VariableReference {.inline.} =
-  let kind = v.scope.module.stackSlots[v.stackIndex].kind
+  let kind = v.scope.module.memorySlots[v.stackIndex].kind
   assert kind in {Local, Argument, Pinned}
   VariableReference(variable: v, type: `type`, kind: kind)
 
@@ -69,8 +69,8 @@ proc capture*(c: Module, v: Variable): int =
   else:
     if not c.origin.isNil:
       discard c.origin.module.capture(v)
-    result = c.captures.mgetOrPut(v, c.stackSlots.len)
-    if result == c.stackSlots.len:
+    result = c.captures.mgetOrPut(v, c.memorySlots.len)
+    if result == c.memorySlots.len:
       c.addStackSlot(StaticCapture, v, v.scope.module.get(v))
 
 proc captureModule*(c: Module, m: Module): int
@@ -132,18 +132,18 @@ proc evaluateStatic*(scope: Scope, ex: Expression, bound: TypeBound = +AnyTy): V
 proc setStatic*(variable: Variable, expression: Expression) =
   let value = variable.scope.compile(expression, +variable.knownType)
   variable.knownType = value.knownType
-  let val = variable.scope.module.stack.evaluate(value)
-  variable.scope.module.stack.set(variable.stackIndex, val)
+  let val = variable.scope.module.memory.evaluate(value)
+  variable.scope.module.memory.set(variable.stackIndex, val)
   variable.evaluated = true
 
 proc captureModule*(c: Module, m: Module): int =
-  result = c.moduleCaptures.mgetOrPut(m, c.stackSlots.len)
-  if result == c.stackSlots.len:
+  result = c.moduleCaptures.mgetOrPut(m, c.memorySlots.len)
+  if result == c.memorySlots.len:
     if m == c:
       let v = newVariable("_this", ModuleTy)
       v.hidden = true
       v.scope = c.top # ???
-      v.stackIndex = c.stackSlots.len # ???
+      v.stackIndex = c.memorySlots.len # ???
       c.addStackSlot(This, v, toValue(m))
     else:
       var sup = -1
@@ -151,7 +151,7 @@ proc captureModule*(c: Module, m: Module): int =
         raise (ref OutOfScopeAddressError)(expression: nil,
           innerModule: c, outerModule: m,
           msg: "cannot find path to module object: " & $m & "\nfrom module:" & $c)
-      result = c.capture(c.origin.module.stackSlots[sup].variable)
+      result = c.capture(c.origin.module.memorySlots[sup].variable)
 
 proc variableGet*(c: Module, r: VariableReference): Statement =
   let t = r.type
@@ -172,7 +172,7 @@ proc variableGet*(c: Module, r: VariableReference): Statement =
     result = Statement(kind: skAddressGet,
       addressGetModule: Statement(kind: skVariableGet,
         variableGetIndex: c.captureModule(r.variable.scope.module),
-        knownType: ModuleStackTy),
+        knownType: MemoryTy),
       addressGetIndex: r.variable.stackIndex,
       knownType: t)
 
@@ -188,7 +188,7 @@ proc variableSet*(c: Module, r: VariableReference, value: Statement, source: Exp
     result = Statement(kind: skAddressSet,
       addressSetModule: Statement(kind: skVariableGet,
         variableGetIndex: c.captureModule(r.variable.scope.module),
-        knownType: ModuleStackTy),
+        knownType: MemoryTy),
       addressSetIndex: r.variable.stackIndex,
       addressSetValue: value,
       knownType: t)

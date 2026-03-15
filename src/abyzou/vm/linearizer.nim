@@ -526,36 +526,36 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
 
 proc createLinearContext*(module: Module): LinearContext =
   result = LinearContext()
-  result.variableRegisters.newSeq(module.stackSlots.len + 1)
-  result.constants.newSeq(module.stackSlots.len)
+  result.variableRegisters.newSeq(module.memorySlots.len + 1)
+  result.constants.newSeq(module.memorySlots.len)
   result.thisIndex = module.moduleCaptures.getOrDefault(module, -1)
-  for i in 0 ..< module.stackSlots.len:
+  for i in 0 ..< module.memorySlots.len:
     let reg = result.newRegister()
     result.variableRegisters[i] = reg
     var forceSetDefault = false
-    let kind = module.stackSlots[i].kind
+    let kind = module.memorySlots[i].kind
     case kind
     of Local:
       # enforce this so that other modules can easily access it:
-      doAssert reg.int == module.stackSlots[i].variable.stackIndex, $(i, reg.int, module.stackSlots[i].variable.stackIndex)
+      doAssert reg.int == module.memorySlots[i].variable.stackIndex, $(i, reg.int, module.memorySlots[i].variable.stackIndex)
     of Argument:
       result.argRegisters.add(reg)
     of StaticCapture:
       forceSetDefault = true
     of Pinned:
       # enforce this so that other modules can easily access it:
-      doAssert reg.int == module.stackSlots[i].variable.stackIndex, $(i, reg.int, module.stackSlots[i].variable.stackIndex)
+      doAssert reg.int == module.memorySlots[i].variable.stackIndex, $(i, reg.int, module.memorySlots[i].variable.stackIndex)
       if i + 1 > result.heapSize:
         result.heapSize = i + 1
       doAssert result.thisIndex >= 0
     of This:
       # enforce this so that other modules can easily access it:
-      doAssert reg.int == module.stackSlots[i].variable.stackIndex, $(i, reg.int, module.stackSlots[i].variable.stackIndex)
+      doAssert reg.int == module.memorySlots[i].variable.stackIndex, $(i, reg.int, module.memorySlots[i].variable.stackIndex)
       doAssert result.thisIndex == reg.int
       continue # do not set default value
     else: discard
     # this might lose performance but is needed for capture arming
-    let defaultValue = module.stack.get(i)
+    let defaultValue = module.memory.get(i)
     if forceSetDefault or defaultValue.kind != vNone:
       result.constants[i] = defaultValue
       result.add(LinearInstruction(kind: LoadConstant, lc:

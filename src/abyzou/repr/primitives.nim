@@ -51,7 +51,8 @@ type
     vStatement
     vModule
       # XXX [modules, memory] implement accessing modules and module variables
-    vModuleStack
+    vMemory
+      ## memory pointer of a module or function
     vBoxed
       ## boxed version of unboxed values, used for type info
     vInt64, vUint64, vFloat64
@@ -83,7 +84,7 @@ type
     tyString = "String",
     tySet = "Set",
     tyTable = "Table",
-    tyExpression = "Expression", tyStatement = "Statement", tyContext = "Context", tyModule = "Module", tyModuleStack = "ModuleStack"
+    tyExpression = "Expression", tyStatement = "Statement", tyContext = "Context", tyModule = "Module", tyMemory = "Memory"
     tyType = "Type",
     # typeclass
     tyAny = "Any", tyAll = "All", ## top and bottom types
@@ -112,7 +113,7 @@ const
   nativeTypes* = {tyNoneValue..tyType, tyTupleConstructor}
     # XXX [types] to consider later: tuple, any all, union intersection not, somevalue
     # typeclasses look a little annoying with normalization
-  noArgNativeTypes* = {tyNoneValue..tyFloat64, tyString, tyExpression, tyStatement, tyContext, tyModule, tyModuleStack}
+  noArgNativeTypes* = {tyNoneValue..tyFloat64, tyString, tyExpression, tyStatement, tyContext, tyModule, tyMemory}
   argNativeTypes* = nativeTypes - noArgNativeTypes
 
 type NativeType* = TypeKind # since it can't be a range
@@ -180,8 +181,8 @@ type
       contextValue*: BoxedValue[Context]
     of vModule:
       moduleValue*: Module
-    of vModuleStack:
-      moduleStackValue*: ModuleStack
+    of vMemory:
+      memoryValue*: Memory
   
   PointerTaggedValue* = distinct (
     when pointerTaggable:
@@ -279,17 +280,18 @@ type
     boundType*: Type
     variance*: Variance
 
-  ModuleStackSeq* = seq[Value]
-  ModuleStack* = ref object
-    stack*: ModuleStackSeq
-  #ModuleStackImplObj* = object
-  #  stack*: ModuleStackSeq
-  #ModuleStackImplSeq* = distinct ModuleStackSeq
-  #ModuleStack* = (
+  MemorySeq* = seq[Value]
+  Memory* = ref object
+    # XXX [memory] only a seq because static evaluation can grow the memory in modules, replace with RefArray and manually regrow
+    stack*: MemorySeq
+  #MemoryImplObj* = object
+  #  stack*: MemorySeq
+  #MemoryImplSeq* = distinct MemorySeq
+  #Memory* = (
   #  when defined(gcDestructors):
-  #    ModuleStackImplObj
+  #    MemoryImplObj
   #  else:
-  #    ModuleStackImplSeq
+  #    MemoryImplSeq
   #)
 
   NativeFunction* = #[ref ]#object
@@ -298,7 +300,7 @@ type
     #`type`*: Type
 
   TreeWalkProgram* = object
-    stack*: ModuleStack
+    memory*: Memory
       ## persistent stack
       ## gets shallow copied when function is run
     instruction*: Statement
@@ -444,8 +446,8 @@ type
     captures*: Table[Variable, int]
     moduleCaptures*: Table[Module, int]
     top*: Scope
-    stackSlots*: seq[StackSlot] ## should not shrink
-    stack*: ModuleStack
+    memorySlots*: seq[StackSlot] ## should not shrink
+    memory*: Memory
 
   Scope* = ref object
     ## restricted subset of variables in a context
@@ -489,28 +491,28 @@ template tupleValue*(v: Value): untyped =
 # for now clashes with `module` macro for libraries
 #proc module*(c: Context): Module {.inline.} = c.scope.module
 
-when ModuleStack is distinct:
-  proc stack*(st: ModuleStack): ModuleStackSeq {.inline.} = ModuleStackSeq(st)
-  proc stack*(st: var ModuleStack): var ModuleStackSeq {.inline.} = ModuleStackSeq(st)
-  template get*(st: ModuleStack, index: int): untyped =
-    ModuleStackSeq(st)[index]
-  template getMut*(st: var ModuleStack, index: int): untyped =
-    ModuleStackSeq(st)[index]
-  template set*(st: var ModuleStack, index: int, value: Value) =
-    ModuleStackSeq(st)[index] = value
-elif ModuleStack is ref:
-  proc get*(stack: ModuleStack, index: int): lent Value {.inline.} =
+when Memory is distinct:
+  proc stack*(st: Memory): MemorySeq {.inline.} = MemorySeq(st)
+  proc stack*(st: var Memory): var MemorySeq {.inline.} = MemorySeq(st)
+  template get*(st: Memory, index: int): untyped =
+    MemorySeq(st)[index]
+  template getMut*(st: var Memory, index: int): untyped =
+    MemorySeq(st)[index]
+  template set*(st: var Memory, index: int, value: Value) =
+    MemorySeq(st)[index] = value
+elif Memory is ref:
+  proc get*(stack: Memory, index: int): lent Value {.inline.} =
     stack.stack[index]
-  proc getMut*(stack: ModuleStack, index: int): var Value {.inline.} =
+  proc getMut*(stack: Memory, index: int): var Value {.inline.} =
     stack.stack[index]
-  proc set*(stack: ModuleStack, index: int, value: sink Value) {.inline.} =
+  proc set*(stack: Memory, index: int, value: sink Value) {.inline.} =
     stack.stack[index] = value
 else:
-  proc get*(stack: ModuleStack, index: int): lent Value {.inline.} =
+  proc get*(stack: Memory, index: int): lent Value {.inline.} =
     stack.stack[index]
-  proc getMut*(stack: var ModuleStack, index: int): var Value {.inline.} =
+  proc getMut*(stack: var Memory, index: int): var Value {.inline.} =
     stack.stack[index]
-  proc set*(stack: var ModuleStack, index: int, value: sink Value) {.inline.} =
+  proc set*(stack: var Memory, index: int, value: sink Value) {.inline.} =
     stack.stack[index] = value
 
 import ./primitiveprocs

@@ -3,7 +3,7 @@ import
   ../repr/[primitives, arrays, valueconstr, typebasics],
   ./checktype
 
-proc shallowRefresh*(stack: ModuleStack): ModuleStack {.inline.} =
+proc shallowRefresh*(stack: Memory): Memory {.inline.} =
   when stack is ref:
     new(result)
     result[] = stack[]
@@ -16,7 +16,7 @@ proc shallowRefresh*(fun: TreeWalkFunction): TreeWalkFunction {.inline.} =
     result[] = fun[]
   else:
     result = fun
-  result.program.stack = result.program.stack.shallowRefresh()
+  result.program.memory = result.program.memory.shallowRefresh()
 
 type EffectHandler* = proc (effect: Value): bool
   ## returns true to continue execution
@@ -27,7 +27,7 @@ template toNegatedBool*(val: Value): bool =
 template toBool*(val: Value): bool =
   val.boolValue
 
-proc evaluate*(stack: var ModuleStack, ins: Statement, effectHandler: EffectHandler = nil): Value
+proc evaluate*(stack: Memory, ins: Statement, effectHandler: EffectHandler = nil): Value
 
 template runCheckEffect(instr: Statement, stack, effectHandler): Value =
   let val = evaluate(stack, instr, effectHandler)
@@ -36,7 +36,7 @@ template runCheckEffect(instr: Statement, stack, effectHandler): Value =
   val
 
 proc call*(fun: TreeWalkProgram, args: sink Array[Value], effectHandler: EffectHandler = nil): Value {.inline.} =
-  var newStack = fun.stack.shallowRefresh()
+  var newStack = fun.memory.shallowRefresh()
   for i in 0 ..< args.len:
     newStack.set(i, args[i])
   if fun.thisIndex >= 0:
@@ -44,7 +44,7 @@ proc call*(fun: TreeWalkProgram, args: sink Array[Value], effectHandler: EffectH
   result = runCheckEffect(fun.instruction, newStack, effectHandler)
 
 proc run*(fun: TreeWalkProgram, effectHandler: EffectHandler = nil): Value {.inline.} =
-  var newStack = fun.stack.shallowRefresh()
+  var newStack = fun.memory.shallowRefresh()
   if fun.thisIndex >= 0:
     newStack.set(fun.thisIndex, toValue newStack)
   result = runCheckEffect(fun.instruction, newStack, effectHandler)
@@ -61,7 +61,7 @@ proc call*(fun: Value, args: sink Array[Value], effectHandler: EffectHandler = n
     result = fun.linearFunctionValue.program.call(args.toOpenArray(0, args.len - 1))
   else: raiseAssert("cannot call " & $fun)
 
-proc evaluate*(stack: var ModuleStack, ins: Statement, effectHandler: EffectHandler = nil): Value =
+proc evaluate*(stack: Memory, ins: Statement, effectHandler: EffectHandler = nil): Value =
   template run(instr; stack = stack; effectHandler = effectHandler): untyped =
     runCheckEffect(instr, stack, effectHandler)
   let ins = ins[]
@@ -99,13 +99,13 @@ proc evaluate*(stack: var ModuleStack, ins: Statement, effectHandler: EffectHand
     stack.set(ins.variableSetIndex, result)
   of skAddressGet:
     let m = unboxStripType run ins.addressGetModule
-    assert m.kind == vModuleStack
-    result = m.moduleStackValue.get(ins.addressGetIndex)
+    assert m.kind == vMemory
+    result = m.memoryValue.get(ins.addressGetIndex)
   of skAddressSet:
     let m = unboxStripType run ins.addressSetModule
-    assert m.kind == vModuleStack
+    assert m.kind == vMemory
     result = run ins.addressSetValue
-    m.moduleStackValue.set(ins.addressSetIndex, result)
+    m.memoryValue.set(ins.addressSetIndex, result)
   of skArmStack:
     result = stack.get(ins.armStackFunctionVariable)
     # XXX [function-arm] missing impl for linear function?
@@ -115,7 +115,7 @@ proc evaluate*(stack: var ModuleStack, ins: Statement, effectHandler: EffectHand
     # XXX [function-arm, needs-testing] the following should let it arm itself
     stack.set(ins.armStackFunctionVariable, result)
     for a, b in ins.armStackCaptures.items:
-      newFn.program.stack.set(a, stack.get(b))
+      newFn.program.memory.set(a, stack.get(b))
   of skIf:
     let cond = run ins.ifCond
     if cond.toBool:

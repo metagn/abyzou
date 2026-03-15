@@ -69,7 +69,7 @@ module syntax:
     else:
       let body2 = [body][0]#copy(body) # weird orc bug workaround
       let tw = TreeWalkProgram(
-        stack: bodyScope.module.stack.shallowRefresh(),
+        memory: bodyScope.module.memory.shallowRefresh(),
         instruction: body2,
         thisIndex: bodyScope.module.moduleCaptures.getOrDefault(bodyScope.module, -1))
       fun = toValue(TreeWalkFunction(

@@ -127,7 +127,7 @@ proc `$`*(value: Value): string =
   of vStatement: $value.statementValue[]
   of vContext: $value.contextValue.value
   of vModule: $value.moduleValue
-  of vModuleStack: "<module stack>"
+  of vMemory: "<memory>"
 
 proc `$`*(p: TypeBase): string {.inline.} = p.name
 
@@ -182,7 +182,7 @@ proc `$`*(module: Module): string =
     result.add ' '
     result.add module.name
   result.add '\n'
-  for v in module.stackSlots:
+  for v in module.memorySlots:
     let prefix =
       case v.kind
       of StaticCapture:

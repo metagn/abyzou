@@ -489,5 +489,5 @@ proc compile*(ex: Expression, imports: seq[Scope], bound: TypeBound = +AnyTy): P
   else:
     result = Program(kind: TreeWalk, tw: TreeWalkProgram(
       instruction: body,#copy(body),
-      stack: module.stack.shallowRefresh(),
+      memory: module.memory.shallowRefresh(),
       thisIndex: module.moduleCaptures.getOrDefault(module, -1)))
