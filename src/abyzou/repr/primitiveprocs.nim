@@ -190,6 +190,10 @@ proc `$`*(module: Module): string =
         "  constant "
       of Argument:
         "  argument "
+      of Pinned:
+        "  pinned "
+      of This:
+        "  this "
       of Local:
         "  "
     result.add(prefix & $v.variable & "\n")

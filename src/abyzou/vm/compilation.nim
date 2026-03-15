@@ -24,6 +24,9 @@ type
   OutOfScopeModifyError* = object of CompileError
     variable*: Variable
     referenceKind*: VariableReferenceKind
+  
+  OutOfScopeAddressError* = object of CompileError
+    innerModule*, outerModule*: Module
 
 proc compile*(scope: Scope, ex: Expression, bound: TypeBound): Statement
 
@@ -486,4 +489,5 @@ proc compile*(ex: Expression, imports: seq[Scope], bound: TypeBound = +AnyTy): P
   else:
     result = Program(kind: TreeWalk, tw: TreeWalkProgram(
       instruction: body,#copy(body),
-      stack: module.stack.shallowRefresh()))
+      stack: module.stack.shallowRefresh(),
+      thisIndex: module.moduleCaptures.getOrDefault(module, -1)))

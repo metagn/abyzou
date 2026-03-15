@@ -39,6 +39,14 @@ proc call*(fun: TreeWalkProgram, args: sink Array[Value], effectHandler: EffectH
   var newStack = fun.stack.shallowRefresh()
   for i in 0 ..< args.len:
     newStack.set(i, args[i])
+  #if fun.thisIndex >= 0:
+  #  newStack.set(fun.thisIndex, fun)
+  result = runCheckEffect(fun.instruction, newStack, effectHandler)
+
+proc run*(fun: TreeWalkProgram, effectHandler: EffectHandler = nil): Value {.inline.} =
+  var newStack = fun.stack.shallowRefresh()
+  #if fun.thisIndex >= 0:
+  #  newStack.set(fun.thisIndex, fun)
   result = runCheckEffect(fun.instruction, newStack, effectHandler)
 
 import ./bytecode

@@ -299,6 +299,7 @@ type
       ## persistent stack
       ## gets shallow copied when function is run
     instruction*: Statement
+    thisIndex*: int
 
   # XXX [functions] add function names to objects but then native function is unnamed
 
@@ -436,6 +437,7 @@ type
     origin*: Scope
       ## context closure is defined in
     captures*: Table[Variable, int]
+    moduleCaptures*: Table[Module, int]
     top*: Scope
     stackSlots*: seq[StackSlot] ## should not shrink
     stack*: ModuleStack
@@ -448,13 +450,19 @@ type
     variables*: seq[Variable] ## should not shrink
 
   VariableReferenceKind* = enum
-    Local, Argument, Constant, StaticCapture
+    Local
+    Argument # slot for function argument
+    Constant
+    StaticCapture # captured value loaded into function stack once when function is created
+    This
+    Pinned # i.e. exported, pinned to the stack in the module object
 
   VariableReference* = object
     variable*: Variable
     `type`*: Type ## must have a known type
     case kind*: VariableReferenceKind
     of Local, Argument, Constant: discard
+    of This, Pinned: discard
     of StaticCapture:
       captureIndex*: int
 
