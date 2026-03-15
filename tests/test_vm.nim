@@ -192,7 +192,6 @@ a = foo()
 _ = a.setter.(3)
 b = foo()
 [a.getter.(), b.getter.()]""": toValue(@[toValue(3), toValue(1)]),
-#[
     """
 foo() =
   @x = 1
@@ -235,7 +234,6 @@ static
   b = foo()
 c = foo()
 [a.getter.(), b.getter.(), c.getter.()]""": toValue(@[toValue(3), toValue(1), toValue(1)]),
-]#
   }
 
   for inp, outp in tests.items:

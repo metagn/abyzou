@@ -79,11 +79,13 @@ module syntax:
     var captures: seq[tuple[index, valueIndex: int]]
     for c, ci in bodyModule.captures:
       captures.add((ci, bodyModule.origin.module.capture(c)))
+    let variableCaptures = captures.len
     if bodyModule in bodyModule.moduleCaptures:
       captures.add((bodyModule.moduleCaptures[bodyModule], v.stackIndex))
     result = constant(fun, fnType)
     if not v.isNil:
-      if captures.len == 0:
+      if variableCaptures == 0:
+        # allow static module memory to be captured
         scope.module.set(v, fun)
       # required so that recursive functions can capture themselves in next statement:
       result = variableSet(scope.module, v.shallowReference, result) # , source = lhs
