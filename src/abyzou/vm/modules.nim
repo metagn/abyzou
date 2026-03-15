@@ -10,6 +10,7 @@ proc newModule*(parent: Scope = nil, imports: seq[Scope] = @[]): Module =
   # XXX [modules] use module registry
   result = Module(id: newModuleId(), origin: parent)
   result.top = Scope(module: result, imports: imports)
+  result.stack = ModuleStack()
 
 proc childModule*(scope: Scope): Module =
   result = newModule(parent = scope)

@@ -4,11 +4,18 @@ import
   ./checktype
 
 proc shallowRefresh*(stack: ModuleStack): ModuleStack {.inline.} =
-  result = stack
+  when stack is ref:
+    new(result)
+    result[] = stack[]
+  else:
+    result = stack
 
 proc shallowRefresh*(fun: TreeWalkFunction): TreeWalkFunction {.inline.} =
-  new(result)
-  result[] = fun[]
+  when fun is ref:
+    new(result)
+    result[] = fun[]
+  else:
+    result = fun
   result.program.stack = result.program.stack.shallowRefresh()
 
 type EffectHandler* = proc (effect: Value): bool

@@ -277,15 +277,17 @@ type
     variance*: Variance
 
   ModuleStackSeq* = seq[Value]
-  ModuleStackImplObj* = object
+  ModuleStack* = ref object
     stack*: ModuleStackSeq
-  ModuleStackImplSeq* = distinct ModuleStackSeq
-  ModuleStack* = (
-    when defined(gcDestructors):
-      ModuleStackImplObj
-    else:
-      ModuleStackImplSeq
-  )
+  #ModuleStackImplObj* = object
+  #  stack*: ModuleStackSeq
+  #ModuleStackImplSeq* = distinct ModuleStackSeq
+  #ModuleStack* = (
+  #  when defined(gcDestructors):
+  #    ModuleStackImplObj
+  #  else:
+  #    ModuleStackImplSeq
+  #)
 
   NativeFunction* = #[ref ]#object
     # value first just to copy BoxedValue
@@ -474,7 +476,7 @@ template tupleValue*(v: Value): untyped =
 # for now clashes with `module` macro for libraries
 #proc module*(c: Context): Module {.inline.} = c.scope.module
 
-when ModuleStack is ModuleStackImplSeq:
+when ModuleStack is distinct:
   proc stack*(st: ModuleStack): ModuleStackSeq {.inline.} = ModuleStackSeq(st)
   proc stack*(st: var ModuleStack): var ModuleStackSeq {.inline.} = ModuleStackSeq(st)
   template get*(st: ModuleStack, index: int): untyped =
