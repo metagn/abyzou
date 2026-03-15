@@ -1,6 +1,6 @@
 import std/[algorithm, hashes, tables],
   ../lang/[expressions],
-  ../repr/[primitives, ids, typebasics],
+  ../repr/[primitives, ids, typebasics, valueconstr],
   ./[typematch, treewalk]
 
 proc newVariable*(name: string, knownType: Type = NoType): Variable =
@@ -67,7 +67,10 @@ proc capture*(c: Module, v: Variable): int =
     if not c.origin.isNil:
       discard c.origin.module.capture(v)
     result = c.captures.mgetOrPut(v, c.stackSlots.len)
-    c.addStackSlot(StaticCapture, v, v.scope.module.get(v))
+    if result == c.stackSlots.len:
+      c.addStackSlot(StaticCapture, v, v.scope.module.get(v))
+
+proc captureModule*(c: Module, m: Module): int
 
 proc symbols*(scope: Scope, name: string, bound: TypeBound,
   nameHash = name.hash): seq[VariableReference] =
@@ -77,7 +80,7 @@ proc symbols*(scope: Scope, name: string, bound: TypeBound,
   elif not scope.module.origin.isNil:
     for a in symbols(scope.module.origin, name, bound, nameHash = nameHash):
       let b =
-        if a.kind == VariableReferenceKind.Constant:
+        if a.kind in {VariableReferenceKind.Constant, Pinned}:
           a
         else:
           VariableReference(variable: a.variable, type: a.type,
@@ -130,6 +133,21 @@ proc setStatic*(variable: Variable, expression: Expression) =
   variable.scope.module.stack.set(variable.stackIndex, val)
   variable.evaluated = true
 
+proc captureModule*(c: Module, m: Module): int =
+  result = c.moduleCaptures.mgetOrPut(m, c.stackSlots.len)
+  if result == c.stackSlots.len:
+    if m == c:
+      let v = newVariable("_this", ModuleTy)
+      v.hidden = true
+      c.addStackSlot(This, v, toValue(m))
+    else:
+      var sup = -1
+      if c.origin.isNil or (sup = c.origin.module.captureModule(m); sup < 0):
+        raise (ref OutOfScopeAddressError)(expression: nil,
+          innerModule: c, outerModule: m,
+          msg: "cannot find path to module object: " & $m & "\nfrom module:" & $c)
+      result = c.capture(c.origin.module.stackSlots[sup].variable)
+
 proc variableGet*(c: Module, r: VariableReference): Statement =
   let t = r.type
   case r.kind
@@ -137,7 +155,7 @@ proc variableGet*(c: Module, r: VariableReference): Statement =
     result = Statement(kind: skConstant,
       constant: r.variable.scope.module.get(r.variable),
       knownType: t)
-  of Local, Argument:
+  of Local, Argument, This:
     result = Statement(kind: skVariableGet,
       variableGetIndex: r.variable.stackIndex,
       knownType: t)
@@ -145,14 +163,29 @@ proc variableGet*(c: Module, r: VariableReference): Statement =
     result = Statement(kind: skVariableGet,
       variableGetIndex: c.capture(r.variable),
       knownType: t)
+  of Pinned:
+    result = Statement(kind: skAddressGet,
+      addressGetModule: Statement(kind: skVariableGet,
+        variableGetIndex: c.captureModule(r.variable.scope.module),
+        knownType: ModuleTy),
+      addressGetIndex: r.variable.stackIndex,
+      knownType: t)
 
 proc variableSet*(c: Module, r: VariableReference, value: Statement, source: Expression = nil): Statement =
   let t = r.type
   case r.kind
-  of Local, Argument:
+  of Local, Argument, This:
     result = Statement(kind: skVariableSet,
       variableSetIndex: r.variable.stackIndex,
       variableSetValue: value,
+      knownType: t)
+  of Pinned:
+    result = Statement(kind: skAddressSet,
+      addressSetModule: Statement(kind: skVariableGet,
+        variableGetIndex: c.captureModule(r.variable.scope.module),
+        knownType: ModuleTy),
+      addressSetIndex: r.variable.stackIndex,
+      addressSetValue: value,
       knownType: t)
   of Constant, StaticCapture:
     raise (ref OutOfScopeModifyError)(expression: source,
