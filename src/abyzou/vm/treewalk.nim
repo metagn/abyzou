@@ -1,14 +1,7 @@
 import
   std/[sets, tables],
-  ../repr/[primitives, arrays, valueconstr, typebasics],
+  ../repr/[primitives, arrays, valueconstr, typebasics, memory],
   ./checktype
-
-proc shallowRefresh*(stack: Memory): Memory {.inline.} =
-  when stack is ref:
-    new(result)
-    result[] = stack[]
-  else:
-    result = stack
 
 proc shallowRefresh*(fun: TreeWalkFunction): TreeWalkFunction {.inline.} =
   when fun is ref:

@@ -1,6 +1,6 @@
 import std/[algorithm, hashes, tables],
   ../lang/[expressions],
-  ../repr/[primitives, ids, typebasics, valueconstr],
+  ../repr/[primitives, memory, ids, typebasics, valueconstr],
   ./[typematch, treewalk]
 
 proc newVariable*(name: string, knownType: Type = NoType): Variable =
@@ -10,7 +10,7 @@ proc newModule*(parent: Scope = nil, imports: seq[Scope] = @[]): Module =
   # XXX [modules] use module registry
   result = Module(id: newModuleId(), origin: parent)
   result.top = Scope(module: result, imports: imports)
-  result.memory = Memory()
+  result.memory = newMemory()
 
 proc childModule*(scope: Scope): Module =
   result = newModule(parent = scope)
@@ -35,8 +35,7 @@ proc evaluateStatic*(module: Module, st: Statement): Value =
 
 proc addStackSlot*(module: Module, kind: VariableReferenceKind, v: Variable) =
   module.memorySlots.add(StackSlot(kind: kind, variable: v))
-  if module.memory.stack.len < module.memorySlots.len:
-    module.memory.stack.setLen(module.memorySlots.len)
+  module.memory.grow(module.memorySlots.len)
 
 proc addStackSlot*(module: Module, kind: VariableReferenceKind, v: Variable, value: Value) =
   let i = module.memorySlots.len

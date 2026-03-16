@@ -2,8 +2,8 @@ import
   std/[hashes, tables, sets, strutils, algorithm],
   ../defines,
   ../lang/[expressions, number, shortstring],
-  ../repr/[ids, primitives, arrays, typebasics, valueconstr, guesstype],
-  ./[typematch, linearizer, programs, treewalk]
+  ../repr/[ids, primitives, arrays, memory, typebasics, valueconstr, guesstype],
+  ./[typematch, linearizer, programs]
 
 type
   CompileError* = object of CatchableError

@@ -280,18 +280,15 @@ type
     boundType*: Type
     variance*: Variance
 
-  MemorySeq* = seq[Value]
-  Memory* = ref object
-    # XXX [memory] only a seq because static evaluation can grow the memory in modules, replace with RefArray and manually regrow
-    stack*: MemorySeq
-  #MemoryImplObj* = object
-  #  stack*: MemorySeq
-  #MemoryImplSeq* = distinct MemorySeq
+  MemoryArray* = RefArray[Value]
+  Memory* = object
+    stack*: MemoryArray
+  #MemoryImplDistinct* = distinct MemoryArray
   #Memory* = (
   #  when defined(gcDestructors):
   #    MemoryImplObj
   #  else:
-  #    MemoryImplSeq
+  #    MemoryImplDistinct
   #)
 
   NativeFunction* = #[ref ]#object
@@ -490,30 +487,6 @@ template tupleValue*(v: Value): untyped =
 
 # for now clashes with `module` macro for libraries
 #proc module*(c: Context): Module {.inline.} = c.scope.module
-
-when Memory is distinct:
-  proc stack*(st: Memory): MemorySeq {.inline.} = MemorySeq(st)
-  proc stack*(st: var Memory): var MemorySeq {.inline.} = MemorySeq(st)
-  template get*(st: Memory, index: int): untyped =
-    MemorySeq(st)[index]
-  template getMut*(st: var Memory, index: int): untyped =
-    MemorySeq(st)[index]
-  template set*(st: var Memory, index: int, value: Value) =
-    MemorySeq(st)[index] = value
-elif Memory is ref:
-  proc get*(stack: Memory, index: int): lent Value {.inline.} =
-    stack.stack[index]
-  proc getMut*(stack: Memory, index: int): var Value {.inline.} =
-    stack.stack[index]
-  proc set*(stack: Memory, index: int, value: sink Value) {.inline.} =
-    stack.stack[index] = value
-else:
-  proc get*(stack: Memory, index: int): lent Value {.inline.} =
-    stack.stack[index]
-  proc getMut*(stack: var Memory, index: int): var Value {.inline.} =
-    stack.stack[index]
-  proc set*(stack: var Memory, index: int, value: sink Value) {.inline.} =
-    stack.stack[index] = value
 
 import ./primitiveprocs
 export primitiveprocs

@@ -22,6 +22,22 @@ idObject(TypeParameter)
 idObject(Variable)
 idObject(Module)
 
+proc hash*(p: Memory): Hash {.noSideEffect.} =
+  when p is distinct:
+    mix cast[pointer](p)
+  else:
+    mix cast[pointer](p.stack)
+  result = !$ result
+
+proc `==`*(a, b: Memory): bool {.noSideEffect.} =
+  when a is distinct:
+    let aPtr = cast[pointer](a)
+    let bPtr = cast[pointer](b)
+  else:
+    let aPtr = cast[pointer](a.stack)
+    let bPtr = cast[pointer](b.stack)
+  result = aPtr == bPtr
+
 proc hash*(v: BoxedValueObj): Hash {.noSideEffect.}
 proc hash*(v: Value): Hash {.noSideEffect.}
 proc hash*(v: Type): Hash {.noSideEffect.}

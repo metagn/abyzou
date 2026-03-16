@@ -2,7 +2,7 @@
 
 {.push hint[DuplicateModuleImport]: off.}
 import
-  ../repr/[primitives, arrays, guesstype, valueconstr, typebasics],
+  ../repr/[primitives, arrays, guesstype, valueconstr, typebasics, memory],
   ./[linearizer, checktype],
   std/[sets, tables]
 
@@ -422,11 +422,9 @@ proc call*(lf: LinearProgram, args: openarray[Value]): Value =
     registers[lf.argPositions[i]] = args[i]
   let resultPos = lf.argPositions[args.len]
 
-  var heap: Memory = nil
   if lf.heapSize > 0 or lf.thisIndex >= 0:
     assert lf.heapSize > 0 and lf.thisIndex >= 0, $(lf.heapSize, lf.thisIndex)
-    heap = Memory()
-    heap.stack.setLen(lf.heapSize)
+    let heap = newMemory(lf.heapSize)
     registers[lf.thisIndex] = toValue(heap)
   
   runOnStack(lf, registers, resultPos)

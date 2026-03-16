@@ -1,4 +1,4 @@
-import ../repr/[primitives, arrays, valueconstr, typebasics], std/tables
+import ../repr/[primitives, arrays, memory, valueconstr, typebasics], std/tables
 
 # XXX [bytecode] do some kind of register last use analysis to merge some registers
 # XXX [serialization] constant pool can be long string of serialized values,

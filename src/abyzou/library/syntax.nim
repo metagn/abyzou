@@ -2,8 +2,8 @@ import
   std/tables,
   ../defines,
   ../lang/[expressions, shortstring],
-  ../repr/[primitives, typebasics, valueconstr],
-  ../vm/[compilation, linearizer, treewalk]
+  ../repr/[primitives, typebasics, valueconstr, memory],
+  ../vm/[compilation, linearizer]
 
 import common
 
