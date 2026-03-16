@@ -1,4 +1,4 @@
-import ../repr/[primitives, arrays, valueconstr, typebasics], std/tables
+import ../repr/[primitives, arrays, memory, valueconstr, typebasics], std/tables
 
 # XXX [bytecode] do some kind of register last use analysis to merge some registers
 # XXX [serialization] constant pool can be long string of serialized values,
@@ -15,6 +15,9 @@ type
     LoadConstant
       ## shallow copies element from constant pool
     SetRegisterRegister # mov
+    LoadAddress, SetAddress
+      # XXX [memory, bytecode] maybe just merge with GetIndex/SetIndex/GetConstIndex/SetConstIndex, and adapt the Result mechanism below to it
+      # otherwise it uses an extra register every time something from the heap is used 
     NullaryCall, UnaryCall, BinaryCall, TernaryCall
     TupleCall
     TryDispatch, ArmType
@@ -43,6 +46,10 @@ type
       lc*: tuple[res: Register, constant: Constant]
     of SetRegisterRegister:
       srr*: tuple[dest, src: Register]
+    of LoadAddress:
+      la*: tuple[res, heap: Register, ind: int32]
+    of SetAddress:
+      sa*: tuple[heap: Register, ind: int32, val: Register]
     of NullaryCall:
       ncall*: tuple[res, callee: Register]
     of UnaryCall:
@@ -98,6 +105,8 @@ type
     instructions*: seq[LinearInstruction]
     byteCount*: int
     registerCount*: int
+    heapSize*: int
+    thisIndex*: int
     jumpLocationCount*: int
     jumpLocationByteIndex*: seq[int]
     constants*: seq[Value] # first are always variable default values
@@ -180,6 +189,10 @@ proc addBytes*(bytes: var openarray[byte], i: var int, instr: LinearInstruction)
     add instr.lc
   of SetRegisterRegister:
     add instr.srr
+  of LoadAddress:
+    add instr.la
+  of SetAddress:
+    add instr.sa
   of NullaryCall:
     add instr.ncall
   of UnaryCall:
@@ -284,6 +297,7 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
   template statement(s: Statement) {.callsite.} =
     linearize(module, fn, statementResult, s)
   let resultKind = result.kind
+  # XXX [bytecode] reads still generate for statement outputs, especially collections below
   case s.kind
   of skNone:
     case resultKind
@@ -366,6 +380,24 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
     of Value:
       result.value = val
     of Statement: discard
+  of skAddressGet:
+    fn.add(Instr(kind: LoadAddress, la:
+      (res: resultRegister(fn, result),
+        heap: value(s.addressGetMemory),
+        ind: s.addressGetIndex.int32)))
+  of skAddressSet:
+    let val = value(s.addressSetValue)
+    fn.add(Instr(kind: SetAddress, sa:
+      (heap: value(s.addressSetMemory),
+        ind: s.addressSetIndex.int32,
+        val: val)))
+    case resultKind
+    of SetRegister:
+      fn.add(Instr(kind: SetRegisterRegister, srr:
+        (dest: result.register, src: val)))
+    of Value:
+      result.value = val
+    of Statement: discard
   of skArmStack:
     let fun = fn.variableRegisters[s.armStackFunctionVariable]
     fn.add(Instr(kind: RefreshStack, rfs: (fun: fun)))
@@ -419,7 +451,7 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
     linearize(module, fn, result, s.effectBody)
     fn.add(Instr(kind: PopEffectHandler))
   of skTuple:
-    # XXX [bytecode] statement shouldn't build collection
+    # see statement output comment above
     let res = resultRegister(fn, result)
     fn.add(Instr(kind: InitTuple, coll:
       (res: res, siz: s.elements.len.int32)))
@@ -427,31 +459,31 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
       fn.add(Instr(kind: SetConstIndex, sci:
         (coll: res, ind: i.int32, val: value(a))))
   of skList:
-    # XXX [bytecode] statement shouldn't build collection
+    # see statement output comment above
     let res = resultRegister(fn, result)
     fn.add(Instr(kind: InitList, coll:
       (res: res, siz: s.elements.len.int32)))
     for i, a in s.elements:
-      # XXX [memory, references] SetIndex for lists and strings should only work if their pointer is
+      # XXX [memory] SetIndex for lists and strings should only work if their pointer is
       # in the same location in memory as arrays
       fn.add(Instr(kind: SetConstIndex, sci:
         (coll: res, ind: i.int32, val: value(a))))
   of skSet:
-    # XXX [bytecode] statement shouldn't build collection
+    # see statement output comment above
     let res = resultRegister(fn, result)
     fn.add(Instr(kind: InitSet, coll:
       (res: res, siz: s.elements.len.int32)))
     for a in s.elements:
-      # XXX [memory, references] no SetIndex for sets
+      # XXX [memory] no SetIndex for sets
       fn.add(Instr(kind: SetIndex, sri:
         (coll: res, ind: value(a), val: value(a))))
   of skTable:
-    # XXX [bytecode] statement shouldn't build collection
+    # see statement output comment above
     let res = resultRegister(fn, result)
     fn.add(Instr(kind: InitTable, coll:
       (res: res, siz: s.elements.len.int32)))
     for k, v in s.entries.items:
-      # XXX [memory, references] probably no SetIndex for tables
+      # XXX [memory] probably no SetIndex for tables
       fn.add(Instr(kind: SetIndex, sri:
         (coll: res, ind: value(k), val: value(v))))
   of skGetIndex:
@@ -493,22 +525,43 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
 
 proc createLinearContext*(module: Module): LinearContext =
   result = LinearContext()
-  result.variableRegisters.newSeq(module.stackSlots.len + 1)
-  result.constants.newSeq(module.stackSlots.len)
-  for i in 0 ..< module.stackSlots.len:
+  result.variableRegisters.newSeq(module.memorySlots.len + 1)
+  result.constants.newSeq(module.memorySlots.len)
+  result.thisIndex = module.moduleCaptures.getOrDefault(module, -1)
+  for i in 0 ..< module.memorySlots.len:
     let reg = result.newRegister()
     result.variableRegisters[i] = reg
-    if module.stackSlots[i].kind == Local:
+    var forceSetDefault = false
+    let kind = module.memorySlots[i].kind
+    case kind
+    of Local:
       # enforce this so that other modules can easily access it:
-      doAssert reg.int == module.stackSlots[i].variable.stackIndex, $(i, reg.int, module.stackSlots[i].variable.stackIndex)
-    if module.stackSlots[i].kind == Argument:
+      doAssert reg.int == module.memorySlots[i].variable.stackIndex, $(i, reg.int, module.memorySlots[i].variable.stackIndex)
+    of Argument:
       result.argRegisters.add(reg)
+    of StaticCapture:
+      forceSetDefault = true
+    of Pinned:
+      # enforce this so that other modules can easily access it:
+      doAssert reg.int == module.memorySlots[i].variable.stackIndex, $(i, reg.int, module.memorySlots[i].variable.stackIndex)
+      if i + 1 > result.heapSize:
+        result.heapSize = i + 1
+      doAssert result.thisIndex >= 0
+    of ThisMemory:
+      # enforce this so that other modules can easily access it:
+      doAssert reg.int == module.memorySlots[i].variable.stackIndex, $(i, reg.int, module.memorySlots[i].variable.stackIndex)
+      doAssert result.thisIndex == reg.int
+      continue # do not set default value
+    else: discard
     # this might lose performance but is needed for capture arming
-    let defaultValue = module.stackSlots[i].value
-    if defaultValue.kind != vNone or module.stackSlots[i].kind == Capture:
+    let defaultValue = module.memory.get(i)
+    if forceSetDefault or defaultValue.kind != vNone:
       result.constants[i] = defaultValue
       result.add(LinearInstruction(kind: LoadConstant, lc:
         (res: reg, constant: Constant(i))))
+      if kind == Pinned:
+        result.add(LinearInstruction(kind: SetAddress, sa:
+          (heap: Register(result.thisIndex), ind: i.int32, val: reg)))
   result.argRegisters.add(result.newRegister()) # result value
 
 proc linear*(module: Module, body: Statement): LinearContext =
@@ -522,6 +575,8 @@ proc toFunction*(lc: LinearContext): LinearProgram =
     ap[i] = lc.argRegisters[i].int
   result = LinearProgram(
     registerCount: lc.registerCount,
+    heapSize: lc.heapSize,
+    thisIndex: lc.thisIndex,
     argPositions: ap,
     constants: toArray(lc.constants),
     jumpLocations: toArray(lc.jumpLocationByteIndex),

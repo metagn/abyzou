@@ -27,7 +27,7 @@ task docs, "build docs for all modules":
 
 task tests, "run tests for multiple backends":
   when declared(runTests):
-    runTests(optionCombos = @[
+    runTests(@["tests/test_vm.nim"], optionCombos = @[
       "--mm:refc -d:abyzouUseBytecode=true",
       "--mm:refc -d:abyzouUseBytecode=false",
       "--mm:orc -d:abyzouUseBytecode=true",
@@ -37,7 +37,7 @@ task tests, "run tests for multiple backends":
       #"-d:abyzouUseUnicode=false",
       #"-d:abyzouDoLineColumn=false"
     ])
-    runTests(@["tests/test_parser.nim"], backends = {js, nims})
+    runTests(@["tests/test_parser.nim"], backends = {c, js, nims})
   else:
     echo "tests task not implemented, need nimbleutils"
 

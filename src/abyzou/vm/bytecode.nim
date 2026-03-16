@@ -2,7 +2,7 @@
 
 {.push hint[DuplicateModuleImport]: off.}
 import
-  ../repr/[primitives, arrays, guesstype, valueconstr, typebasics],
+  ../repr/[primitives, arrays, guesstype, valueconstr, typebasics, memory],
   ./[linearizer, checktype],
   std/[sets, tables]
 
@@ -98,6 +98,16 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
     of SetRegisterRegister:
       read instr.srr
       mov instr.srr.src, instr.srr.dest
+    of LoadAddress:
+      read instr.la
+      let heap = unboxStripType get instr.la.heap
+      assert heap.kind == vMemory
+      put instr.la.res, heap.memoryValue.get(instr.la.ind)
+    of SetAddress:
+      read instr.sa
+      let heap = unboxStripType get instr.sa.heap
+      assert heap.kind == vMemory, $heap
+      heap.memoryValue.set(instr.sa.ind, get instr.sa.val)
     of NullaryCall:
       read instr.ncall
       let fn {.cursor.} = unboxStripType get instr.ncall.callee
@@ -217,7 +227,7 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
       let fn = get(instr.arm.fun)
       case fn.kind
       of vFunction:
-        fn.functionValue.program.stack.set(instr.arm.ind, get(instr.arm.val))
+        fn.functionValue.program.memory.set(instr.arm.ind, get(instr.arm.val))
       of vLinearFunction:
         fn.linearFunctionValue.program.constants[instr.arm.ind] = get instr.arm.val
       else: raiseAssert("cannot arm stack of " & $fn)
@@ -326,7 +336,7 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
       read instr.gri
       let coll = get instr.gri.coll
       let ind = get instr.gri.ind
-      # XXX [memory, references] maybe prevent dispatch here
+      # XXX [memory] maybe prevent dispatch here
       case coll.kind
       of vList:
         put instr.gri.res, coll.listValue.value.unref[ind.unboxStripType.int32Value]
@@ -342,7 +352,7 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
       let coll = get instr.sri.coll
       let ind = get instr.sri.ind
       let val = get instr.sri.val
-      # XXX [memory, references] maybe prevent dispatch here
+      # XXX [memory] maybe prevent dispatch here
       case coll.kind
       of vList:
         coll.listValue.value.unref[ind.unboxStripType.int32Value] = val
@@ -411,6 +421,11 @@ proc call*(lf: LinearProgram, args: openarray[Value]): Value =
   for i in 0 ..< args.len:
     registers[lf.argPositions[i]] = args[i]
   let resultPos = lf.argPositions[args.len]
+
+  if lf.heapSize > 0 or lf.thisIndex >= 0:
+    assert lf.heapSize > 0 and lf.thisIndex >= 0, $(lf.heapSize, lf.thisIndex)
+    let heap = newMemory(lf.heapSize)
+    registers[lf.thisIndex] = toValue(heap)
   
   runOnStack(lf, registers, resultPos)
 

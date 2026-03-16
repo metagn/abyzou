@@ -105,6 +105,10 @@ a = 0
     # also tests generics:
     "a = ref 1; update a, 1 + unref a; unref a": toValue(2),
 
+    # misc
+    "[1, 2, 3][0]": toValue(1),
+    "x = 1; [1, 2, 3][x]": toValue(2),
+
     # closures with references (mutable):
     "a = ref 1; foo() = unref a; [foo(), (update(a, 2); foo()), foo()]": toValue(@[toValue(1), toValue(2), toValue(2)]),
     "a = 1; foo() = (b = 2; bar() = (c = 3; (a, b, c)); bar()); foo()": toValue(toArray([toValue(1), toValue(2), toValue(3)])),
@@ -116,6 +120,15 @@ foo() =
 a = foo()
 _ = a.setter.(3)
 a.getter.()""": toValue(3),
+    """
+foo() =
+  x = ref 1
+  (getter: (() => unref x),
+  setter: ((y: Int) => update(x, y))) 
+a = foo()
+_ = a.setter.(3)
+b = foo()
+[a.getter.(), b.getter.()]""": toValue(@[toValue(3), toValue(1)]),
     """
 foo() =
   x = ref 1
@@ -135,15 +148,6 @@ static
   a = foo()
   _ = a.setter.(3)
 a.getter.()""": toValue(3),
-    """
-foo() =
-  x = ref 1
-  (getter: (() => unref x),
-  setter: ((y: Int) => update(x, y))) 
-a = foo()
-_ = a.setter.(3)
-b = foo()
-[a.getter.(), b.getter.()]""": toValue(@[toValue(3), toValue(1)]),
     """
 foo() =
   x = ref 1
@@ -167,8 +171,69 @@ static
   b = foo()
 c = foo()
 [a.getter.(), b.getter.(), c.getter.()]""": toValue(@[toValue(3), toValue(1), toValue(1)]),
-    "[1, 2, 3][0]": toValue(1),
-    "x = 1; [1, 2, 3][x]": toValue(2)
+
+    # closures with pinned captures (mutable):
+    "@a = 1; foo() = a; [foo(), (a = 2; foo()), foo()]": toValue(@[toValue(1), toValue(2), toValue(2)]),
+    "@a = 1; foo() = (@b = 2; bar() = (@c = 3; (a, b, c)); bar()); foo()": toValue(toArray([toValue(1), toValue(2), toValue(3)])),
+    """
+foo() =
+  @x = 1
+  (getter: (() => x),
+  setter: ((y: Int) => x = y)) 
+a = foo()
+_ = a.setter.(3)
+a.getter.()""": toValue(3),
+    """
+foo() =
+  @x = 1
+  (getter: (() => x),
+  setter: ((y: Int) => x = y)) 
+a = foo()
+_ = a.setter.(3)
+b = foo()
+[a.getter.(), b.getter.()]""": toValue(@[toValue(3), toValue(1)]),
+    """
+foo() =
+  @x = 1
+  (getter: (
+    () => x),
+  setter: (
+    (y: Int) => x = y)) 
+static a = foo()
+_ = a.setter.(3)
+a.getter.()""": toValue(3),
+    """
+foo() =
+  @x = 1
+  (getter: (() => x),
+  setter: ((y: Int) => x = y)) 
+static
+  a = foo()
+  _ = a.setter.(3)
+a.getter.()""": toValue(3),
+    """
+foo() =
+  @x = 1
+  (getter: (
+    () => x),
+  setter: (
+    (y: Int) => x = y)) 
+static a = foo()
+_ = a.setter.(3)
+static b = foo()
+c = foo()
+[a.getter.(), b.getter.(), c.getter.()]""": toValue(@[toValue(3), toValue(1), toValue(1)]),
+    """
+foo() =
+  @x = 1
+  (getter: (() => x),
+  setter: ((y: Int) => x = y)) 
+static
+  a = foo()
+  _ = a.setter.(3)
+  b = foo()
+c = foo()
+[a.getter.(), b.getter.(), c.getter.()]""": toValue(@[toValue(3), toValue(1), toValue(1)]),
   }
 
   for inp, outp in tests.items:

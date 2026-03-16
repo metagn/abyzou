@@ -2,7 +2,7 @@ import
   std/tables,
   ../defines,
   ../lang/[expressions, shortstring],
-  ../repr/[primitives, typebasics, valueconstr],
+  ../repr/[primitives, typebasics, valueconstr, memory],
   ../vm/[compilation, linearizer]
 
 import common
@@ -16,6 +16,21 @@ module syntax:
     result = toValue constant(context.scope.module.evaluateStatic(st), st.knownType)
 
   # XXX [types, macros, functions] add syntax for generic assignments or functions
+  proc extractNameInfo(ex: Expression): tuple[kind: VariableReferenceKind, name: string] =
+    var ex = ex
+    if ex.kind in {Prefix, PathPrefix} and ex.address.isIdentifier(prefix) and prefix == "@":
+      result.kind = Pinned
+      ex = ex.arguments[0]
+    else:
+      result.kind = Local
+    case ex.kind
+    of Name:
+      result.name = ex.identifier
+    of Symbol:
+      result.name = $ex.symbol
+    else:
+      result.name = ""
+
   proc makeFn(scope: Scope, arguments: seq[Expression], body: Expression,
     name: string, returnBound: TypeBound, returnBoundSet: bool): Statement =
     let bodyModule = scope.childModule()
@@ -54,8 +69,9 @@ module syntax:
     else:
       let body2 = [body][0]#copy(body) # weird orc bug workaround
       let tw = TreeWalkProgram(
-        stack: bodyScope.module.makeStack(),
-        instruction: body2)
+        memory: bodyScope.module.memory.shallowRefresh(),
+        instruction: body2,
+        thisIndex: bodyScope.module.moduleCaptures.getOrDefault(bodyScope.module, -1))
       fun = toValue(TreeWalkFunction(
         program: tw,
         type: fnType))
@@ -63,9 +79,13 @@ module syntax:
     var captures: seq[tuple[index, valueIndex: int]]
     for c, ci in bodyModule.captures:
       captures.add((ci, bodyModule.origin.module.capture(c)))
+    let variableCaptures = captures.len
+    if bodyModule in bodyModule.moduleCaptures:
+      captures.add((bodyModule.moduleCaptures[bodyModule], v.stackIndex))
     result = constant(fun, fnType)
     if not v.isNil:
-      if captures.len == 0:
+      if variableCaptures == 0:
+        # allow static module memory to be captured
         scope.module.set(v, fun)
       # required so that recursive functions can capture themselves in next statement:
       result = variableSet(scope.module, v.shallowReference, result) # , source = lhs
@@ -108,13 +128,13 @@ module syntax:
         (+t, true)
       else:
         (+AnyTy, false)
-    case lhs.kind
-    of Name, Symbol:
-      let name = $lhs
+    let nameInfo = extractNameInfo(lhs)
+    if nameInfo.name != "":
       let value = compile(scope, rhs, bound)
-      let v = scope.define(name, if typeSet: bound.boundType else: value.knownType)
+      let v = newVariable(nameInfo.name, if typeSet: bound.boundType else: value.knownType)
+      scope.define(v, nameInfo.kind)
       result = toValue variableSet(scope.module, v.shallowReference, value, source = lhs)
-    of CallKinds:
+    elif lhs.kind in CallKinds:
       result = toValue makeFn(scope, lhs.arguments, rhs, $lhs.address, bound, typeSet)
     else: assert false, $lhs
   templ "=", 2:
@@ -128,26 +148,31 @@ module syntax:
         (+t, true)
       else:
         (+AnyTy, false)
-    case lhs.kind
-    of Name, Symbol:
-      let name = $lhs
-      if (let a = scope.overloads(name, bound); a.len != 0):
+    # XXX proper address setting here? i.e. (someAddress()) = 123
+    let nameInfo = extractNameInfo(lhs)
+    if nameInfo.name != "":
+      if (let a = scope.overloads(nameInfo.name, bound); a.len != 0):
         let v = a[0]
+        if nameInfo.kind != Local and v.kind != nameInfo.kind:
+          assert false, "cannot change variable kind from " & $v.kind & " to " & $nameInfo.kind
         let value = compile(scope, rhs, +v.type)
         result = toValue variableSet(scope.module, v, value, source = lhs)
       else:
         let value = compile(scope, rhs, bound)
-        let v = scope.define(name, value.knownType)
-        result = toValue variableSet(scope.module, v.shallowReference, value, source = lhs)
-    of CallKinds:
-      result = toValue makeFn(scope, lhs.arguments, rhs, $lhs.address, bound, typeSet)
-    of Subscript:
-      result = toValue compile(scope, Expression(kind: PathCall,
-        address: newSymbolExpression(short".[]="),
-        arguments: @[lhs.address] & lhs.arguments & rhs), bound)
-    of CurlySubscript:
-      result = toValue compile(scope, Expression(kind: PathCall,
-        address: newSymbolExpression(short".{}="),
-        arguments: @[lhs.address] & lhs.arguments & rhs), bound)
-    else: assert false, $lhs
+        let v = newVariable(nameInfo.name, value.knownType)
+        scope.define(v, nameInfo.kind)
+        result = toValue variableSet(scope.module, VariableReference(variable: v, type: v.knownType, kind: nameInfo.kind), value, source = lhs)
+    else:
+      case lhs.kind
+      of CallKinds:
+        result = toValue makeFn(scope, lhs.arguments, rhs, $lhs.address, bound, typeSet)
+      of Subscript:
+        result = toValue compile(scope, Expression(kind: PathCall,
+          address: newSymbolExpression(short".[]="),
+          arguments: @[lhs.address] & lhs.arguments & rhs), bound)
+      of CurlySubscript:
+        result = toValue compile(scope, Expression(kind: PathCall,
+          address: newSymbolExpression(short".{}="),
+          arguments: @[lhs.address] & lhs.arguments & rhs), bound)
+      else: assert false, $lhs
   # todo: let/for

@@ -52,6 +52,7 @@ proc toValue*(x: Expression): Value = withkind(expression, x)
 proc toValue*(x: Statement): Value = withkind(statement, x)
 proc toValue*(x: Context): Value = withkindbox(context, x)
 proc toValue*(x: Module): Value = withkind(module, x)
+proc toValue*(x: Memory): Value = withkind(memory, x)
 
 proc unboxStripType*(x: Value): Value {.inline.} =
   if x.kind == vBoxed: result = x.boxedValue.value

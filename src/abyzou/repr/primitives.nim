@@ -37,7 +37,7 @@ type
     vReference
       ## reference value, can be mutable
       ## only value kind with reference semantics
-      # XXX [modules, references] ^ make this wrong with module idea, this can stay otherwise though
+      # XXX [memory] ^ this should be wrong
     vArray
       ## like java array but typed like TS, implementation of tuples
     vFunction
@@ -50,7 +50,9 @@ type
     vExpression
     vStatement
     vModule
-      # XXX [modules, references] implement accessing modules and module variables
+    vMemory
+      ## memory pointer of a module or function
+      # XXX [memory] maybe replace vReference, vArray, maybe more with this
     vBoxed
       ## boxed version of unboxed values, used for type info
     vInt64, vUint64, vFloat64
@@ -58,6 +60,7 @@ type
       ## type value
     vString
       ## general byte sequence type
+      # XXX [memory] maybe split into vByteList (mutable), vByteArray (immutable/ungrowable), vShortByteArray, then strings can abstract over these
     vList
       ## both seq and string are references to save memory
     vSet
@@ -82,7 +85,7 @@ type
     tyString = "String",
     tySet = "Set",
     tyTable = "Table",
-    tyExpression = "Expression", tyStatement = "Statement", tyContext = "Context", tyModule = "Module",
+    tyExpression = "Expression", tyStatement = "Statement", tyContext = "Context", tyModule = "Module", tyMemory = "Memory"
     tyType = "Type",
     # typeclass
     tyAny = "Any", tyAll = "All", ## top and bottom types
@@ -111,7 +114,7 @@ const
   nativeTypes* = {tyNoneValue..tyType, tyTupleConstructor}
     # XXX [types] to consider later: tuple, any all, union intersection not, somevalue
     # typeclasses look a little annoying with normalization
-  noArgNativeTypes* = {tyNoneValue..tyFloat64, tyString, tyExpression, tyStatement, tyContext, tyModule}
+  noArgNativeTypes* = {tyNoneValue..tyFloat64, tyString, tyExpression, tyStatement, tyContext, tyModule, tyMemory}
   argNativeTypes* = nativeTypes - noArgNativeTypes
 
 type NativeType* = TypeKind # since it can't be a range
@@ -140,10 +143,10 @@ type
     of vEffect:
       effectValue*: Box[Value]
     of vReference:
-      # XXX [memory, references] figure out how to optimize this for mutable collections - probably wont and just have the collections act like references
+      # XXX [memory] figure out how to optimize this for mutable collections - probably wont and just have the collections act like references
       referenceValue*: Reference[Value]
     of vArray:
-      # XXX [memory, references] maybe match pointer field location with vList, vString
+      # XXX [memory] maybe match pointer field location with vList, vString
       arrayValue*: RefArray[Value]
     of vBoxed:
       boxedValue*: BoxedValue[Value]
@@ -156,10 +159,10 @@ type
     of vType:
       typeValue*: BoxedValue[Type]
     of vString:
-      # XXX [memory, references] maybe match pointer field location with vArray, vList
+      # XXX [memory] maybe match pointer field location with vArray, vList
       stringValue*: BoxedValue[string]
     of vList:
-      # XXX [memory, references] maybe match pointer field location with vArray, vString
+      # XXX [memory] maybe match pointer field location with vArray, vString
       listValue*: BoxedValue[seq[Value]]
     of vSet:
       setValue*: BoxedValue[HashSet[Value]]
@@ -179,6 +182,8 @@ type
       contextValue*: BoxedValue[Context]
     of vModule:
       moduleValue*: Module
+    of vMemory:
+      memoryValue*: Memory
   
   PointerTaggedValue* = distinct (
     when pointerTaggable:
@@ -216,6 +221,7 @@ type
 
   TypeBase* = ref object
     # XXX [types] check arguments at generic fill time
+    # XXX [types, modules] relate this to modules and memory etc somehow
     id*: TypeBaseId
     name*: string
     nativeType*: NativeType
@@ -276,8 +282,16 @@ type
     boundType*: Type
     variance*: Variance
 
-  Stack* = ref object
-    stack*: Array[Value]
+  MemoryArray* = RefArray[Value]
+  Memory* = object
+    stack*: MemoryArray
+  #MemoryImplDistinct* = distinct MemoryArray
+  #Memory* = (
+  #  when defined(gcDestructors):
+  #    MemoryImplObj
+  #  else:
+  #    MemoryImplDistinct
+  #)
 
   NativeFunction* = #[ref ]#object
     # value first just to copy BoxedValue
@@ -285,10 +299,11 @@ type
     #`type`*: Type
 
   TreeWalkProgram* = object
-    stack*: Stack
+    memory*: Memory
       ## persistent stack
       ## gets shallow copied when function is run
     instruction*: Statement
+    thisIndex*: int
 
   # XXX [functions] add function names to objects but then native function is unnamed
 
@@ -299,6 +314,8 @@ type
 
   LinearProgram* = object
     registerCount*: int
+    heapSize*: int
+    thisIndex*: int
     argPositions*: Array[int] ## last is result
     constants*: Array[Value] # XXX [serialization] serialize values
     jumpLocations*: Array[int]
@@ -308,6 +325,7 @@ type
     # value first just to copy BoxedValue
     program*: LinearProgram
     `type`*: Type
+
   BinaryInstructionKind* = enum
     AddInt, SubInt, MulInt, DivInt
     AddFloat, SubFloat, MulFloat, DivFloat
@@ -323,6 +341,7 @@ type
     skSequence
     # stack
     skVariableGet, skVariableSet
+    skAddressGet, skAddressSet
     skArmStack
     # goto
     skIf, skWhile, skDoUntil
@@ -357,6 +376,13 @@ type
     of skVariableSet:
       variableSetIndex*: int
       variableSetValue*: Statement
+    of skAddressGet:
+      addressGetMemory*: Statement
+      addressGetIndex*: int
+    of skAddressSet:
+      addressSetMemory*: Statement
+      addressSetIndex*: int
+      addressSetValue*: Statement
     of skArmStack:
       armStackFunctionVariable*: int
       armStackCaptures*: seq[tuple[index, valueIndex: int]]
@@ -402,12 +428,12 @@ type
     genericParams*: seq[TypeParameter]
       # XXX [types] maybe make this a tuple type too with signature for named and default generic params
     lazyExpression*: Expression
+      # XXX [modules] actually use this for easy mutual recursion
     evaluated*: bool
 
   StackSlot* = object
     kind*: VariableReferenceKind
     variable*: Variable
-    value*: Value
 
   Module* = ref object
     ## current module or function
@@ -417,9 +443,11 @@ type
     origin*: Scope
       ## context closure is defined in
     captures*: Table[Variable, int]
+    moduleCaptures*: Table[Module, int]
     top*: Scope
-    stackSlots*: seq[StackSlot] ## should not shrink
-  
+    memorySlots*: seq[StackSlot] ## should not shrink
+    memory*: Memory
+
   Scope* = ref object
     ## restricted subset of variables in a context
     parent*: Scope
@@ -428,14 +456,20 @@ type
     variables*: seq[Variable] ## should not shrink
 
   VariableReferenceKind* = enum
-    Local, Argument, Constant, Capture
+    Local
+    Argument # slot for function argument
+    Constant
+    StaticCapture # captured value loaded into function stack once when function is created
+    ThisMemory
+    Pinned # i.e. exported, pinned to the stack in the module object
 
   VariableReference* = object
     variable*: Variable
     `type`*: Type ## must have a known type
     case kind*: VariableReferenceKind
     of Local, Argument, Constant: discard
-    of Capture:
+    of ThisMemory, Pinned: discard
+    of StaticCapture:
       captureIndex*: int
 
   Context* = object

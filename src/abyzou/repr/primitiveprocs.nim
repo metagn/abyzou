@@ -22,6 +22,15 @@ idObject(TypeParameter)
 idObject(Variable)
 idObject(Module)
 
+proc hash*(p: Memory): Hash {.noSideEffect.} =
+  mix cast[pointer](p.stack)
+  result = !$ result
+
+proc `==`*(a, b: Memory): bool {.noSideEffect.} =
+  let aPtr = cast[pointer](a.stack)
+  let bPtr = cast[pointer](b.stack)
+  result = aPtr == bPtr
+
 proc hash*(v: BoxedValueObj): Hash {.noSideEffect.}
 proc hash*(v: Value): Hash {.noSideEffect.}
 proc hash*(v: Type): Hash {.noSideEffect.}
@@ -37,7 +46,6 @@ template hashRefObj(T): untyped {.dirty.} =
 hashRefObj BoxedValue
 hashRefObj(ref Value)
 hashRefObj(ref Type)
-hashRefObj Stack
 
 template hashObj(T): untyped {.dirty.} =
   proc hash*(v: T): Hash {.noSideEffect.} =
@@ -128,6 +136,7 @@ proc `$`*(value: Value): string =
   of vStatement: $value.statementValue[]
   of vContext: $value.contextValue.value
   of vModule: $value.moduleValue
+  of vMemory: "<memory>"
 
 proc `$`*(p: TypeBase): string {.inline.} = p.name
 
@@ -182,15 +191,19 @@ proc `$`*(module: Module): string =
     result.add ' '
     result.add module.name
   result.add '\n'
-  for v in module.stackSlots:
+  for v in module.memorySlots:
     let prefix =
       case v.kind
-      of Capture:
+      of StaticCapture:
         "  capture "
       of Constant: # not used
         "  constant "
       of Argument:
         "  argument "
+      of Pinned:
+        "  pinned "
+      of ThisMemory:
+        "  this memory "
       of Local:
         "  "
     result.add(prefix & $v.variable & "\n")
