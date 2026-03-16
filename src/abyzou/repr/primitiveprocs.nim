@@ -121,9 +121,21 @@ proc `$`*(value: Value): string =
     s
   of vEffect: "Effect(" & $value.effectValue.unref & ")"
   of vBoxed: $value.boxedValue.value
-  of vInt64: $value.int64Value.value
-  of vUint64: $value.uint64Value.value
-  of vFloat64: $value.float64Value.value
+  of vInt64:
+    when not largeValue:
+      $value.int64Value.value
+    else:
+      $value.int64Value
+  of vUint64:
+    when not largeValue:
+      $value.uint64Value.value
+    else:
+      $value.uint64Value
+  of vFloat64:
+    when not largeValue:
+      $value.float64Value.value
+    else:
+      $value.float64Value
   of vList: ($value.listValue.value.unref)[1..^1]
   of vString: value.stringValue.value.unref
   of vType: $value.typeValue.type

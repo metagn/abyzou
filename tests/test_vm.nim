@@ -42,7 +42,7 @@ test "eval values":
     "a = (b = do c = 1); (a, 2, b,  3, c, \"ab\")":
       toValue(toArray([toValue(1), toValue(2), toValue(1), toValue(3), toValue(1), toValue("ab")])),
     "a = (b = do c = 1); a + (b + 3) + c": toValue(6),
-    "9 * (1 + 4) / 2 - 3f": toValue(19.5),
+    "9 * (1 + 4) / 2 - 3f": toValue(19.5.float32),
     "9 * (1 + 4) div 2 - 3": toValue(19),
 
     # functions:

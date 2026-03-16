@@ -15,11 +15,21 @@ proc toValue*(x: int32): Value {.inline.} = withkind(int32, x)
 proc toValue*(x: uint32): Value {.inline.} = withkind(uint32, x)
 proc toValue*(x: float32): Value {.inline.} = withkind(float32, x)
 proc toValue*(x: bool): Value = withkind(bool, x)
-proc toValue*(x: int64): Value = withkindbox(int64, x)
-proc toValue*(x: uint64): Value = withkindbox(uint64, x)
+proc toValue*(x: int64): Value =
+  when largeValue:
+    withkind(int64, x)
+  else:
+    withkindbox(int64, x)
+proc toValue*(x: uint64): Value =
+  when largeValue:
+    withkind(uint64, x)
+  else:
+    withkindbox(uint64, x)
 proc toValue*(x: float64): Value =
-  toValue(x.float32)
-  #withkindbox(float64, x)
+  when largeValue:
+    withkind(float64, x)
+  else:
+    withkindbox(float64, x)
 proc toValue*(x: int): Value =
   if x <= high(int32) and x >= low(int32):
     toValue(int32(x))
@@ -60,13 +70,19 @@ proc unboxStripType*(x: Value): Value {.inline.} =
 
 proc setTypeIfBoxed*(x: Value, t: Type) {.inline.} =
   case x.kind
-  of untypedValueKinds: discard
+  of untypedValueKinds - largeValueKinds: discard
   of vBoxed: x.boxedValue.type = t
   of vList: x.listValue.type = t
   of vString: x.stringValue.type = t
-  of vInt64: x.int64Value.type = t
-  of vUint64: x.uint64Value.type = t
-  of vFloat64: x.float64Value.type = t
+  of vInt64:
+    when not largeValue:
+      x.int64Value.type = t
+  of vUint64:
+    when not largeValue:
+      x.uint64Value.type = t
+  of vFloat64:
+    when not largeValue:
+      x.float64Value.type = t
   of vType: x.typeValue.type = t
   of vSet: x.setValue.type = t
   of vTable: x.tableValue.type = t
@@ -77,13 +93,19 @@ proc setTypeIfBoxed*(x: Value, t: Type) {.inline.} =
 
 proc getTypeIfBoxed*(x: Value): Type {.inline.} =
   case x.kind
-  of untypedValueKinds: discard
+  of untypedValueKinds - largeValueKinds: discard
   of vBoxed: result = x.boxedValue.type
   of vList: result = x.listValue.type
   of vString: result = x.stringValue.type
-  of vInt64: result = x.int64Value.type
-  of vUint64: result = x.uint64Value.type
-  of vFloat64: result = x.float64Value.type
+  of vInt64:
+    when not largeValue:
+      result = x.int64Value.type
+  of vUint64:
+    when not largeValue:
+      result = x.uint64Value.type
+  of vFloat64:
+    when not largeValue:
+      result = x.float64Value.type
   of vType: result = x.typeValue.type
   of vSet: result = x.setValue.type
   of vTable: result = x.tableValue.type

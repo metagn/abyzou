@@ -1,9 +1,11 @@
 import
   std/[tables, sets, hashes],
+  ../defines,
   ../util/box,
   ./[arrays, pointertag, ids],
   ../lang/expressions
 
+export largeValue
 export box, unbox
 template toRef*[T](x: T): ref T =
   var res: ref T
@@ -30,6 +32,7 @@ type
       ## singleton null value
     vInt32, vUint32, vFloat32, vBool
       ## unboxed numbers
+    # XXX 48 bit ints, probably expanded to 64 bit then capped off again, but can keep 32 bit for maybe faster operations
     vEffect
       ## embedded effect value for exceptions/return/yield/whatever
     #vShortestString
@@ -68,6 +71,7 @@ type
     vContext
     # bigints can be added
     # native types in general can be BoxedValue[pointer]
+    # XXX ^ no, use an inheritable NativeValue, maybe use it for sets and tables
 
   TypeKind* = enum
     # maybe add unknown type for values with unknown type at runtime
@@ -102,7 +106,9 @@ type
 
 const
   allValueKinds* = {low(ValueKind)..high(ValueKind)}
-  boxedValueKinds* = {vBoxed..high(ValueKind)}
+  largeValueKinds* = {vInt64..vFloat64}
+  boxedValueKinds* = {vBoxed..high(ValueKind)} -
+    (when largeValue: largeValueKinds else: {})
   functionValueKinds* = {vFunction..vNativeFunction}
   typedValueKinds* = boxedValueKinds + functionValueKinds - {vNativeFunction}
   untypedValueKinds* = allValueKinds - typedValueKinds
@@ -128,7 +134,8 @@ type
   BoxedValue*[T] = ref BoxedValueObj[T]
 
   ValueObj* = object
-    # entire thing can be pointer tagged, but would need GC hooks
+    # entire thing can be pointer tagged, but would need GC hooks - implemented in external library froth
+    # probably use exboxing, high exponents get boxed
     # maybe interning for some pointer types
     case kind*: ValueKind
     of vNone: discard
@@ -151,11 +158,11 @@ type
     of vBoxed:
       boxedValue*: BoxedValue[Value]
     of vInt64:
-      int64Value*: BoxedValue[int64]
+      int64Value*: (when largeValue: int64 else: BoxedValue[int64])
     of vUint64:
-      uint64Value*: BoxedValue[uint64]
+      uint64Value*: (when largeValue: uint64 else: BoxedValue[uint64])
     of vFloat64:
-      float64Value*: BoxedValue[float64]
+      float64Value*: (when largeValue: float64 else: BoxedValue[float64])
     of vType:
       typeValue*: BoxedValue[Type]
     of vString:

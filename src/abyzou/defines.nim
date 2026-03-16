@@ -2,16 +2,17 @@
 
 const
   # if using unicode in JS, turn bound checks off
-  useUnicode* = block: (const abyzouUseUnicode {.booldefine.} = true; abyzouUseUnicode)
+  useUnicode* {.booldefine: "abyzou.unicode".} = true
     ## treat unicode alpha and whitespace characters accordingly in tokenizer
-  doLineColumn* = block: (const abyzouDoLineColumn {.booldefine.} = true; abyzouDoLineColumn)
-  refToken* = block: (const abyzouRefToken {.booldefine.} = defined(js); abyzouRefToken)
+  doLineColumn* {.booldefine: "abyzou.lineColumn".} = true
+  refToken* {.booldefine: "abyzou.refToken".} = defined(js)
     ## make token type a reference rather than a value type
-  arrayImpl* = block:
-    const abyzouArrayImpl {.strdefine.} =
-      when (NimMajor, NimMinor) >= (2, 2):
-        "mantavalue"
-      else:
-        "manta"
-    abyzouArrayImpl
-  useBytecode* = block: (const abyzouUseBytecode {.booldefine.} = true; abyzouUseBytecode)
+  arrayImpl* {.strdefine: "abyzou.arrayImpl".} =
+    when (NimMajor, NimMinor) >= (2, 2):
+      "mantavalue"
+    else:
+      "manta"
+  useBytecode* {.booldefine: "abyzou.bytecode".} = true
+  largeValue* {.booldefine: "abyzou.largeValue".} = true
+    ## whether or not to fully embrace values that only fit in 64 bits
+    ## in the future can be used to disable pointer tagging

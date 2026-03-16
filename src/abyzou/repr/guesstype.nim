@@ -1,5 +1,6 @@
 import
   std/[sets, tables],
+  ../defines,
   ../util/box,
   ../repr/[primitives, arrays],
   ./typebasics
@@ -14,13 +15,16 @@ proc getType*(x: Value): Type =
   of vUint32: result = Uint32Ty
   of vFloat32: result = Float32Ty
   of vInt64:
-    boxedType x.int64Value
+    when not largeValue:
+      boxedType x.int64Value
     result = Int64Ty
   of vUint64:
-    boxedType x.uint64Value
+    when not largeValue:
+      boxedType x.uint64Value
     result = Uint64Ty
   of vFloat64:
-    boxedType x.float64Value
+    when not largeValue:
+      boxedType x.float64Value
     result = Float64Ty
   of vBool: result = BoolTy
   of vReference: result = ReferenceTy[x.referenceValue.unref.getType]

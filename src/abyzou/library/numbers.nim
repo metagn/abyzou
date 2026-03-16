@@ -22,16 +22,16 @@ module numbers:
   define "Uint64", Uint64Ty
   template unarySingle(op: static string, k) =
     fn op, [Ty(`k`)], Ty(`k`):
-      toValue callOp(`op`, args[0].`k Value`)
+      toValue k callOp(`op`, args[0].`k Value`)
   template unarySingleAlias(name, op: static string, k) =
     fn op, [Ty(`k`)], Ty(`k`):
-      toValue callOp(`op`, args[0].`k Value`)
+      toValue k callOp(`op`, args[0].`k Value`)
   template binarySingle(op: static string, k) =
     fn op, [Ty(`k`), Ty(`k`)], Ty(`k`):
-      toValue callOp(`op`, args[0].`k Value`, args[1].`k Value`)
+      toValue k callOp(`op`, args[0].`k Value`, args[1].`k Value`)
   template binarySingleAlias(name, op: static string, k) =
     fn name, [Ty(`k`), Ty(`k`)], Ty(`k`):
-      toValue callOp(`op`, args[0].`k Value`, args[1].`k Value`)
+      toValue k callOp(`op`, args[0].`k Value`, args[1].`k Value`)
   template binary(op: static string) =
     binarySingle op, int32
     binarySingle op, uint32
@@ -55,7 +55,7 @@ module numbers:
   binarySingle "div", uint32
   template floatDivide(k) =
     fn "/", [Ty(`k`), Ty(`k`)], Float32Ty:
-      toValue args[0].`k Value` / args[1].`k Value`
+      toValue float32(args[0].`k Value` / args[1].`k Value`)
   floatDivide int32
   floatDivide float32
   template instr(name, instructionName, k) =

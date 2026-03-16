@@ -11,7 +11,7 @@ skipDirs      = @["src/abyzou/disabled"]
 
 # Dependencies
 
-requires "nim >= 1.6.14"
+requires "nim >= 2.0.0"
 requires "skinsuit >= 0.2.3"
 requires "manta"
 requires "https://github.com/metagn/hemodyne"
@@ -28,14 +28,18 @@ task docs, "build docs for all modules":
 task tests, "run tests for multiple backends":
   when declared(runTests):
     runTests(@["tests/test_vm.nim"], optionCombos = @[
-      "--mm:refc -d:abyzouUseBytecode=true",
-      "--mm:refc -d:abyzouUseBytecode=false",
-      "--mm:orc -d:abyzouUseBytecode=true",
-      "--mm:orc -d:abyzouUseBytecode=false",
+      "--mm:refc -d:abyzou.bytecode=true -d:abyzou.largeValue=true",
+      "--mm:refc -d:abyzou.bytecode=false -d:abyzou.largeValue=true",
+      "--mm:orc -d:abyzou.bytecode=true -d:abyzou.largeValue=true",
+      "--mm:orc -d:abyzou.bytecode=false -d:abyzou.largeValue=true",
+      "--mm:refc -d:abyzou.bytecode=true -d:abyzou.largeValue=false",
+      "--mm:refc -d:abyzou.bytecode=false -d:abyzou.largeValue=false",
+      "--mm:orc -d:abyzou.bytecode=true -d:abyzou.largeValue=false",
+      "--mm:orc -d:abyzou.bytecode=false -d:abyzou.largeValue=false",
       #"--gc:orc -d:useMalloc",
       #"--gc:orc -d:danger",
-      #"-d:abyzouUseUnicode=false",
-      #"-d:abyzouDoLineColumn=false"
+      #"-d:abyzou.unicode=false",
+      #"-d:abyzou.lineColumn=false"
     ])
     runTests(@["tests/test_parser.nim"], backends = {c, js, nims})
   else:

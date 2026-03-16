@@ -1,3 +1,5 @@
+# see froth, probably will do exboxing (i.e. high exponents are boxed)
+
 const pointerTaggable* = sizeof(pointer) == 8
 
 when pointerTaggable:

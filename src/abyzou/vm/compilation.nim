@@ -37,7 +37,7 @@ template constant*(value: untyped, ty: Type): Statement =
 template constant*(value: string): Statement = constant(value, StringTy)
 template constant*(value: int32): Statement = constant(value, Int32Ty)
 template constant*(value: uint32): Statement = constant(value, Uint32Ty)
-template constant*(value: float32): Statement = constant(value, Float32Ty)
+template constant*(value: float32): Statement = constant(float32(value), Float32Ty)
 
 import ./modules
 export modules
