@@ -16,7 +16,8 @@ type
       ## shallow copies element from constant pool
     SetRegisterRegister # mov
     LoadAddress, SetAddress
-      # XXX [bytecode, modules, memory] these can be optimized to be another version of registers if the module (up to equality of id in current module registry) is known at compile time
+      # XXX [memory, bytecode] maybe just merge with GetIndex/SetIndex/GetConstIndex/SetConstIndex, and adapt the Result mechanism below to it
+      # otherwise it uses an extra register every time something from the heap is used 
     NullaryCall, UnaryCall, BinaryCall, TernaryCall
     TupleCall
     TryDispatch, ArmType
@@ -381,15 +382,13 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
     of Statement: discard
   of skAddressGet:
     fn.add(Instr(kind: LoadAddress, la:
-      # XXX [bytecode, modules, memory] should this really use another register? as opposed to directly using the address every time
       (res: resultRegister(fn, result),
-        heap: value(s.addressGetModule),
+        heap: value(s.addressGetMemory),
         ind: s.addressGetIndex.int32)))
   of skAddressSet:
-    # XXX [bytecode, modules, memory] should this really use another register? as opposed to directly using the address every time
     let val = value(s.addressSetValue)
     fn.add(Instr(kind: SetAddress, sa:
-      (heap: value(s.addressSetModule),
+      (heap: value(s.addressSetMemory),
         ind: s.addressSetIndex.int32,
         val: val)))
     case resultKind
@@ -548,7 +547,7 @@ proc createLinearContext*(module: Module): LinearContext =
       if i + 1 > result.heapSize:
         result.heapSize = i + 1
       doAssert result.thisIndex >= 0
-    of This:
+    of ThisMemory:
       # enforce this so that other modules can easily access it:
       doAssert reg.int == module.memorySlots[i].variable.stackIndex, $(i, reg.int, module.memorySlots[i].variable.stackIndex)
       doAssert result.thisIndex == reg.int

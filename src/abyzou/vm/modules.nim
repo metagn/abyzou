@@ -72,7 +72,7 @@ proc capture*(c: Module, v: Variable): int =
     if result == c.memorySlots.len:
       c.addStackSlot(StaticCapture, v, v.scope.module.get(v))
 
-proc captureModule*(c: Module, m: Module): int
+proc captureMemory*(c: Module, m: Module): int
 
 proc symbols*(scope: Scope, name: string, bound: TypeBound,
   nameHash = name.hash): seq[VariableReference] =
@@ -135,18 +135,18 @@ proc setStatic*(variable: Variable, expression: Expression) =
   variable.scope.module.memory.set(variable.stackIndex, val)
   variable.evaluated = true
 
-proc captureModule*(c: Module, m: Module): int =
+proc captureMemory*(c: Module, m: Module): int =
   result = c.moduleCaptures.mgetOrPut(m, c.memorySlots.len)
   if result == c.memorySlots.len:
     if m == c:
-      let v = newVariable("_this", ModuleTy)
+      let v = newVariable("_memory", MemoryTy)
       v.hidden = true
       v.scope = c.top # ???
       v.stackIndex = c.memorySlots.len # ???
-      c.addStackSlot(This, v, toValue(m))
+      c.addStackSlot(ThisMemory, v, toValue(m))
     else:
       var sup = -1
-      if c.origin.isNil or (sup = c.origin.module.captureModule(m); sup < 0):
+      if c.origin.isNil or (sup = c.origin.module.captureMemory(m); sup < 0):
         raise (ref OutOfScopeAddressError)(expression: nil,
           innerModule: c, outerModule: m,
           msg: "cannot find path to module object: " & $m & "\nfrom module:" & $c)
@@ -159,7 +159,7 @@ proc variableGet*(c: Module, r: VariableReference): Statement =
     result = Statement(kind: skConstant,
       constant: r.variable.scope.module.get(r.variable),
       knownType: t)
-  of Local, Argument, This:
+  of Local, Argument, ThisMemory:
     result = Statement(kind: skVariableGet,
       variableGetIndex: r.variable.stackIndex,
       knownType: t)
@@ -169,8 +169,8 @@ proc variableGet*(c: Module, r: VariableReference): Statement =
       knownType: t)
   of Pinned:
     result = Statement(kind: skAddressGet,
-      addressGetModule: Statement(kind: skVariableGet,
-        variableGetIndex: c.captureModule(r.variable.scope.module),
+      addressGetMemory: Statement(kind: skVariableGet,
+        variableGetIndex: c.captureMemory(r.variable.scope.module),
         knownType: MemoryTy),
       addressGetIndex: r.variable.stackIndex,
       knownType: t)
@@ -178,15 +178,15 @@ proc variableGet*(c: Module, r: VariableReference): Statement =
 proc variableSet*(c: Module, r: VariableReference, value: Statement, source: Expression = nil): Statement =
   let t = r.type
   case r.kind
-  of Local, Argument, This:
+  of Local, Argument, ThisMemory:
     result = Statement(kind: skVariableSet,
       variableSetIndex: r.variable.stackIndex,
       variableSetValue: value,
       knownType: t)
   of Pinned:
     result = Statement(kind: skAddressSet,
-      addressSetModule: Statement(kind: skVariableGet,
-        variableGetIndex: c.captureModule(r.variable.scope.module),
+      addressSetMemory: Statement(kind: skVariableGet,
+        variableGetIndex: c.captureMemory(r.variable.scope.module),
         knownType: MemoryTy),
       addressSetIndex: r.variable.stackIndex,
       addressSetValue: value,

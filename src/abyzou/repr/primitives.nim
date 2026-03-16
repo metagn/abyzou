@@ -37,7 +37,7 @@ type
     vReference
       ## reference value, can be mutable
       ## only value kind with reference semantics
-      # XXX [modules, memory] ^ make this wrong with proper closures, this can stay otherwise though
+      # XXX [memory] ^ this should be wrong
     vArray
       ## like java array but typed like TS, implementation of tuples
     vFunction
@@ -50,9 +50,9 @@ type
     vExpression
     vStatement
     vModule
-      # XXX [modules, memory] implement accessing modules and module variables
     vMemory
       ## memory pointer of a module or function
+      # XXX [memory] maybe replace vReference, vArray, maybe more with this
     vBoxed
       ## boxed version of unboxed values, used for type info
     vInt64, vUint64, vFloat64
@@ -60,6 +60,7 @@ type
       ## type value
     vString
       ## general byte sequence type
+      # XXX [memory] maybe split into vByteList (mutable), vByteArray (immutable/ungrowable), vShortByteArray, then strings can abstract over these
     vList
       ## both seq and string are references to save memory
     vSet
@@ -220,6 +221,7 @@ type
 
   TypeBase* = ref object
     # XXX [types] check arguments at generic fill time
+    # XXX [types, modules] relate this to modules and memory etc somehow
     id*: TypeBaseId
     name*: string
     nativeType*: NativeType
@@ -375,10 +377,10 @@ type
       variableSetIndex*: int
       variableSetValue*: Statement
     of skAddressGet:
-      addressGetModule*: Statement
+      addressGetMemory*: Statement
       addressGetIndex*: int
     of skAddressSet:
-      addressSetModule*: Statement
+      addressSetMemory*: Statement
       addressSetIndex*: int
       addressSetValue*: Statement
     of skArmStack:
@@ -458,7 +460,7 @@ type
     Argument # slot for function argument
     Constant
     StaticCapture # captured value loaded into function stack once when function is created
-    This
+    ThisMemory
     Pinned # i.e. exported, pinned to the stack in the module object
 
   VariableReference* = object
@@ -466,7 +468,7 @@ type
     `type`*: Type ## must have a known type
     case kind*: VariableReferenceKind
     of Local, Argument, Constant: discard
-    of This, Pinned: discard
+    of ThisMemory, Pinned: discard
     of StaticCapture:
       captureIndex*: int
 

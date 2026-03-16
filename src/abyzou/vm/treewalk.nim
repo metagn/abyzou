@@ -91,11 +91,11 @@ proc evaluate*(stack: Memory, ins: Statement, effectHandler: EffectHandler = nil
     result = run ins.variableSetValue
     stack.set(ins.variableSetIndex, result)
   of skAddressGet:
-    let m = unboxStripType run ins.addressGetModule
+    let m = unboxStripType run ins.addressGetMemory
     assert m.kind == vMemory
     result = m.memoryValue.get(ins.addressGetIndex)
   of skAddressSet:
-    let m = unboxStripType run ins.addressSetModule
+    let m = unboxStripType run ins.addressSetMemory
     assert m.kind == vMemory
     result = run ins.addressSetValue
     m.memoryValue.set(ins.addressSetIndex, result)
