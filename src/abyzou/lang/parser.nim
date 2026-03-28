@@ -679,10 +679,10 @@ when isMainModule:
 
   when false:
     let tests = [
-      readFile("concepts/test.byz"),
-      #readFile("concepts/tag.byz"),
-      readFile("concepts/arguments.byz"),
-      readFile("concepts/badspec.byz")
+      readFile("abstract/syntax/test.byz"),
+      #readFile("abstract/syntax/tag.byz"),
+      readFile("abstract/syntax/arguments.byz"),
+      readFile("abstract/syntax/badspec.byz")
     ]
 
     for t in tests:
@@ -814,7 +814,7 @@ finally do
   when false:
     import os
 
-    for (k, p) in walkDir("concepts"):
+    for (k, p) in walkDir("abstract/syntax"):
       if k == pcFile:
         echo "file: ", p
         let e = parse(readFile(p))
