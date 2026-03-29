@@ -351,7 +351,7 @@ type
     # stack
     skVariableGet, skVariableSet
     skAddressGet, skAddressSet
-    skArmStack
+    skPrepareSubmodule
     # goto
     skIf, skWhile, skDoUntil
     # effect, can emulate goto
@@ -381,22 +381,21 @@ type
     of skSequence:
       sequence*: seq[Statement]
     of skVariableGet:
-      variableGetIndex*: int
+      variableGetIndex*: StackIndex
     of skVariableSet:
-      variableSetIndex*: int
+      variableSetIndex*: StackIndex
       variableSetValue*: Statement
     of skAddressGet:
       addressGetMemory*: Statement
-      addressGetIndex*: int
+      addressGetIndex*: StackIndex
     of skAddressSet:
       addressSetMemory*: Statement
-      addressSetIndex*: int
+      addressSetIndex*: StackIndex
       addressSetValue*: Statement
-    of skArmStack:
-      armStackFunctionVariable*: int
-      armStackCaptures*: seq[tuple[index, valueIndex: int]]
-        ## list of (variable in function stack, variable in local stack)
-        ## only used for passing captures so the value is just a variable index
+    of skPrepareSubmodule:
+      ## arms a function with captures etc
+      submodule*: Submodule
+        ## ref object, `captures` field is only set after the module is fully compiled if the submodule is lazy compiled
     of skIf:
       ifCond*, ifTrue*, ifFalse*: Statement
     of skWhile:
@@ -426,36 +425,67 @@ type
       binary1*, binary2*: Statement
   Statement* = ref StatementObj
 
+  StackIndex* = int
+    ## index of variable in module variable list,
+    ## currently also used for variable addresses (i.e. variable registers cannot overlap)
+
   Variable* = ref object
     id*: VariableId
     name*: string
     nameHash*: Hash
     hidden*: bool # unable to look up
     knownType*: Type
-    stackIndex*: int
+    stackIndex*: StackIndex
     scope* {.cursor.}: Scope
     genericParams*: seq[TypeParameter]
       # XXX [types] maybe make this a tuple type too with signature for named and default generic params
-    lazyExpression*: Expression
-      # XXX [modules] actually use this for easy mutual recursion
-    evaluated*: bool
+    isSubmodule*: bool # maybe use variable kind
+    evaluated*: bool # currently just a fast check for if submodule was compiled
 
   StackSlot* = object
     kind*: VariableReferenceKind
     variable*: Variable
 
+  ModuleState* = enum
+    Created
+    Queued ## submodules marked as either this or `Created` will be lazy compiled
+    Compiling
+    Compiled
+  
+  SubmoduleKind* = enum
+    SubmoduleLinearFunction
+    SubmoduleTreeWalkFunction
+  
+  Submodule* = ref object
+    ## ref so the captures can be updated for codegen after a statement with this is generated
+    value*: Module
+      ## can compile after the main module is compiled
+    stackIndex*: StackIndex
+    captures*: seq[tuple[index, valueIndex: StackIndex]]
+      ## list of (variable in submodule stack, variable in local stack)
+      ## only used for passing captures so the value is just a variable index
+      ## is filled after the submodule is compiled
+    case kind*: SubmoduleKind
+    of SubmoduleLinearFunction, SubmoduleTreeWalkFunction:
+      bodyBound*: TypeBound
+      inferReturnType*: bool
+
   Module* = ref object
     ## current module or function
-    ## should not contain any "temporary" compilation constructs but it works out that nothing temporary really needs to stay saved
+    ## should not contain any "temporary" compilation constructs but it works out that everything can stay saved
     id*: ModuleId
     name*: string
+    state*: ModuleState
+    source*: Expression
     origin*: Scope
       ## context closure is defined in
-    captures*: Table[Variable, int]
-    moduleCaptures*: Table[Module, int]
+    captures*: Table[Variable, StackIndex]
+    moduleCaptures*: Table[Module, StackIndex]
+    submodules*: OrderedTable[Variable, Submodule] ## should not shrink
     top*: Scope
     memorySlots*: seq[StackSlot] ## should not shrink
     memory*: Memory
+    runtimeBody*: Statement ## nil until fully compiled
 
   Scope* = ref object
     ## restricted subset of variables in a context

@@ -234,6 +234,19 @@ static
   b = foo()
 c = foo()
 [a.getter.(), b.getter.(), c.getter.()]""": toValue(@[toValue(3), toValue(1), toValue(1)]),
+
+    # mutual recursion, requires pinning i think:
+    """
+@foo = (a: Int) => if(a > 10, a, else: bar(a * 2))
+@bar = (a: Int) => if(a > 10, a, else: foo(a * 3))
+foo(1)
+""": toValue(12),
+    """
+@foo = (a: Int) => if(a > 100, a, else: bar(a * 2))
+@bar = (a: Int) => if(a > 100, a, else: baz(a * 3))
+@baz = (a: Int) => if(a > 100, a, else: foo(a * 5))
+foo(1)
+""": toValue(180),
   }
 
   for inp, outp in tests.items:
@@ -246,7 +259,7 @@ c = foo()
       let ex = parse(inp)
       echo ex
       when false:
-        var module = newModule(imports = @[Prelude])
+        var module = newModule(source = ex, imports = @[Prelude])
         let body = compile(module.top, ex, +AnyTy)
         echo body
       if getCurrentException() of ref NoOverloadFoundError:

@@ -39,6 +39,8 @@ template constant*(value: int32): Statement = constant(value, Int32Ty)
 template constant*(value: uint32): Statement = constant(value, Uint32Ty)
 template constant*(value: float32): Statement = constant(float32(value), Float32Ty)
 
+proc compileSubmodule*(parent: Module, submodule: var Submodule, location: Variable)
+
 import ./modules
 export modules
 
@@ -480,14 +482,64 @@ proc compile*(context: Context, ex: Expression): Statement {.inline.} =
   # context object is huge so dont use it yet
   result = compile(context.scope, ex, context.bound)
 
+proc compile*(module: Module, bound: TypeBound = +AnyTy) =
+  if not module.source.isNil:
+    module.state = Compiling
+    module.runtimeBody = compile(module.top, module.source, bound)
+  for loc, submod in module.submodules.mpairs:
+    compileSubmodule(module, submod, loc)
+  module.state = Compiled
+
+proc toLinear*(module: Module): LinearProgram =
+  if module.runtimeBody.isNil:
+    # could be another error type
+    raise newException(CompileError, "cannot compile function from module without runtime body")
+  let lc = linear(module, module.runtimeBody)
+  result = lc.toFunction()
+
+proc toTreeWalk*(module: Module): TreeWalkProgram =
+  if module.runtimeBody.isNil:
+    # could be another error type
+    raise newException(CompileError, "cannot compile function from module without runtime body")
+  #let body2 = [body][0]#copy(body) # weird orc bug workaround
+  result = TreeWalkProgram(
+    instruction: module.runtimeBody,#copy(body),
+    memory: module.memory.shallowRefresh(),
+    thisIndex: module.moduleCaptures.getOrDefault(module, -1))
+
+proc compileSubmodule*(parent: Module, submodule: var Submodule, location: Variable) =
+  if submodule.value.state in {Created, Queued}:
+    compile(submodule.value, submodule.bodyBound)
+    for c, ci in submodule.value.captures:
+      submodule.captures.add((ci, parent.capture(c)))
+    if submodule.value in submodule.value.moduleCaptures:
+      submodule.captures.add((submodule.value.moduleCaptures[submodule.value], location.stackIndex))
+    case submodule.kind
+    of SubmoduleLinearFunction:
+      if submodule.inferReturnType:
+        location.knownType.nativeArgs[1] = submodule.value.runtimeBody.knownType
+      parent.set(location, toValue LinearFunction(
+        program: submodule.value.toLinear(),
+        type: location.knownType))
+    of SubmoduleTreeWalkFunction:
+      if submodule.inferReturnType:
+        location.knownType.nativeArgs[1] = submodule.value.runtimeBody.knownType
+      parent.set(location, toValue TreeWalkFunction(
+        program: submodule.value.toTreeWalk(),
+        type: location.knownType))
+  # could be submodule referred to by other submodule that is currently compiling:
+  assert submodule.value.state in {Compiling, Compiled}, $submodule.value.state
+  if submodule.value.state == Compiled:
+    case submodule.kind
+    of SubmoduleLinearFunction:
+      assert parent.get(location).kind == vLinearFunction
+    of SubmoduleTreeWalkFunction:
+      assert parent.get(location).kind == vFunction
+
 proc compile*(ex: Expression, imports: seq[Scope], bound: TypeBound = +AnyTy): Program =
-  var module = newModule(imports = imports)
-  let body = compile(module.top, ex, bound)
+  var module = newModule(source = ex, imports = imports)
+  compile(module, bound)
   if useBytecode:
-    let lc = linear(module, body)
-    result = Program(kind: Linear, linear: lc.toFunction())
+    result = Program(kind: Linear, linear: toLinear(module))
   else:
-    result = Program(kind: TreeWalk, tw: TreeWalkProgram(
-      instruction: body,#copy(body),
-      memory: module.memory.shallowRefresh(),
-      thisIndex: module.moduleCaptures.getOrDefault(module, -1)))
+    result = Program(kind: TreeWalk, tw: toTreeWalk(module))

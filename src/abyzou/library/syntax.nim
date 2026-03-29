@@ -2,8 +2,8 @@ import
   std/tables,
   ../defines,
   ../lang/[expressions, shortstring],
-  ../repr/[primitives, typebasics, valueconstr, memory],
-  ../vm/[compilation, linearizer]
+  ../repr/[primitives, typebasics, valueconstr],
+  ../vm/compilation
 
 import common
 
@@ -33,7 +33,7 @@ module syntax:
 
   proc makeFn(scope: Scope, arguments: seq[Expression], body: Expression,
     name: string, returnBound: TypeBound, returnBoundSet: bool): Statement =
-    let bodyModule = scope.childModule()
+    let bodyModule = scope.childModule(body)
     let bodyScope = bodyModule.top
     var fnTypeArguments = Type(kind: tyTuple, elements: newSeq[Type](arguments.len))
     for i in 0 ..< arguments.len:
@@ -57,45 +57,15 @@ module syntax:
       v = newVariable("_lambda", fnType)
       v.hidden = true
       scope.define(v)
-    let body = bodyScope.compile(body, returnBound)
-    if not v.isNil and not returnBoundSet:
-      v.knownType.nativeArgs[1] = body.knownType
-    var fun: Value
-    if useBytecode:
-      let lc = linear(bodyScope.module, body)
-      fun = toValue(LinearFunction(
-        program: lc.toFunction(),
-        type: fnType))
-    else:
-      let body2 = [body][0]#copy(body) # weird orc bug workaround
-      let tw = TreeWalkProgram(
-        memory: bodyScope.module.memory.shallowRefresh(),
-        instruction: body2,
-        thisIndex: bodyScope.module.moduleCaptures.getOrDefault(bodyScope.module, -1))
-      fun = toValue(TreeWalkFunction(
-        program: tw,
-        type: fnType))
-    setTypeIfBoxed(fun, fnType)
-    var captures: seq[tuple[index, valueIndex: int]]
-    for c, ci in bodyModule.captures:
-      captures.add((ci, bodyModule.origin.module.capture(c)))
-    let variableCaptures = captures.len
-    if bodyModule in bodyModule.moduleCaptures:
-      captures.add((bodyModule.moduleCaptures[bodyModule], v.stackIndex))
-    result = constant(fun, fnType)
-    if not v.isNil:
-      if variableCaptures == 0:
-        # allow static module memory to be captured
-        scope.module.set(v, fun)
-      # required so that recursive functions can capture themselves in next statement:
-      result = variableSet(scope.module, v.shallowReference, result) # , source = lhs
-    if captures.len != 0:
-      result = Statement(kind: skSequence, knownType: fnType, sequence: @[
-        result, 
-        Statement(kind: skArmStack,
-          knownType: fnType,
-          armStackFunctionVariable: v.stackIndex,
-          armStackCaptures: captures)])
+    v.isSubmodule = true
+    let submod = Submodule(
+      value: bodyModule,
+      stackIndex: v.stackIndex,
+      kind: if useBytecode: SubmoduleLinearFunction else: SubmoduleTreeWalkFunction,
+      bodyBound: returnBound,
+      inferReturnType: not returnBoundSet)
+    scope.module.submodules[v] = submod
+    result = Statement(kind: skPrepareSubmodule, submodule: submod, knownType: fnType)
 
   templ "=>", 2:
     let scope = context.scope

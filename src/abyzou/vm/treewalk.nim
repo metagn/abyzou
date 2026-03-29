@@ -99,16 +99,30 @@ proc evaluate*(stack: Memory, ins: Statement, effectHandler: EffectHandler = nil
     assert m.kind == vMemory
     result = run ins.addressSetValue
     m.memoryValue.set(ins.addressSetIndex, result)
-  of skArmStack:
-    result = stack.get(ins.armStackFunctionVariable)
-    # XXX [function-arm] missing impl for linear function?
-    let oldFn = result.functionValue
-    let newFn = oldFn.shallowRefresh()
-    result = toValue newFn
-    # XXX [function-arm, needs-testing] the following should let it arm itself
-    stack.set(ins.armStackFunctionVariable, result)
-    for a, b in ins.armStackCaptures.items:
-      newFn.program.memory.set(a, stack.get(b))
+  of skPrepareSubmodule:
+    let submod = ins.submodule
+    assert submod.value.state == Compiled
+    case submod.kind
+    of SubmoduleLinearFunction, SubmoduleTreeWalkFunction:
+      result = stack.get(submod.stackIndex)
+      case result.kind
+      of vFunction:
+        let oldFn = result.functionValue
+        let newFn = oldFn.shallowRefresh()
+        result = toValue newFn
+        # XXX [function-arm, needs-testing] the following should let it arm itself
+        stack.set(submod.stackIndex, result)
+        for a, b in submod.captures.items:
+          newFn.program.memory.set(a, stack.get(b))
+      of vLinearFunction:
+        let oldFn = result.linearFunctionValue
+        let newFn = oldFn.shallowRefresh()
+        result = toValue newFn
+        # XXX [function-arm, needs-testing] the following should let it arm itself
+        stack.set(submod.stackIndex, result)
+        for a, b in submod.captures.items:
+          newFn.program.constants[a] = stack.get(b)
+      else: raiseAssert("cannot arm stack of " & $result)
   of skIf:
     let cond = run ins.ifCond
     if cond.toBool:

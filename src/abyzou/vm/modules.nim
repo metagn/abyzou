@@ -6,14 +6,14 @@ import std/[algorithm, hashes, tables],
 proc newVariable*(name: string, knownType: Type = NoType): Variable =
   Variable(id: newVariableId(), name: name, nameHash: name.hash, knownType: knownType)
 
-proc newModule*(parent: Scope = nil, imports: seq[Scope] = @[]): Module =
+proc newModule*(source: Expression, parent: Scope = nil, imports: seq[Scope] = @[]): Module =
   # XXX [modules] use module registry
-  result = Module(id: newModuleId(), origin: parent)
+  result = Module(id: newModuleId(), origin: parent, source: source, state: Created)
   result.top = Scope(module: result, imports: imports)
   result.memory = newMemory()
 
-proc childModule*(scope: Scope): Module =
-  result = newModule(parent = scope)
+proc childModule*(scope: Scope, source: Expression): Module =
+  result = newModule(source = source, parent = scope)
 
 proc childScope*(scope: Scope): Scope =
   result = Scope(parent: scope, module: scope.module)
@@ -52,10 +52,7 @@ proc evaluateStatic*(scope: Scope, ex: Expression, bound: TypeBound = +AnyTy): V
 
 proc setStatic*(variable: Variable, expression: Expression)
 
-proc getType*(variable: Variable): Type =
-  if variable.knownType.isNoType and not variable.lazyExpression.isNil and not variable.evaluated:
-    variable.setStatic(variable.lazyExpression)
-  variable.knownType
+proc getType*(variable: Variable): Type
 
 proc shallowReference*(v: Variable, `type`: Type = v.getType): VariableReference {.inline.} =
   let kind = v.scope.module.memorySlots[v.stackIndex].kind
@@ -124,6 +121,15 @@ proc overloads*(scope: Scope, name: string, bound: TypeBound): seq[VariableRefer
 proc resolve*(scope: Scope, ex: Expression, name: string, bound: TypeBound): VariableReference
 
 import ./compilation
+
+proc getType*(variable: Variable): Type =
+  when false:
+    # maybe submodules could be used for "lazy variables"
+    if variable.knownType.isNoType and not variable.lazyExpression.isNil and not variable.evaluated:
+      variable.setStatic(variable.lazyExpression)
+  if variable.isSubmodule and not variable.evaluated:
+    compileSubmodule(variable.scope.module, variable.scope.module.submodules[variable], variable)
+  variable.knownType
 
 proc evaluateStatic*(scope: Scope, ex: Expression, bound: TypeBound = +AnyTy): Value =
   scope.module.evaluateStatic(scope.compile(ex, bound))

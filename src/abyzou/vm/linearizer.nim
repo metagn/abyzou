@@ -398,18 +398,24 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
     of Value:
       result.value = val
     of Statement: discard
-  of skArmStack:
-    let fun = fn.variableRegisters[s.armStackFunctionVariable]
-    fn.add(Instr(kind: RefreshStack, rfs: (fun: fun)))
-    for a, b in s.armStackCaptures.items:
-      fn.add(Instr(kind: ArmStack, arm:
-        (fun: fun, ind: a.int32, val: fn.variableRegisters[b])))
-    case result.kind
-    of SetRegister:
-      fn.add(Instr(kind: SetRegisterRegister, srr: (dest: result.register, src: fun)))
-    of Value:
-      result.value = fun
-    of Statement: discard
+  of skPrepareSubmodule:
+    let submod = s.submodule # module.submodules[s.submoduleIndex]
+    assert submod.value.state == Compiled
+    case submod.kind
+    of SubmoduleLinearFunction, SubmoduleTreeWalkFunction:
+      let fun = fn.variableRegisters[submod.stackIndex]
+      if true or submod.captures.len != 0:
+        # i dont know why this wouldnt always be done
+        fn.add(Instr(kind: RefreshStack, rfs: (fun: fun)))
+      for a, b in submod.captures.items:
+        fn.add(Instr(kind: ArmStack, arm:
+          (fun: fun, ind: a.int32, val: fn.variableRegisters[b])))
+      case result.kind
+      of SetRegister:
+        fn.add(Instr(kind: SetRegisterRegister, srr: (dest: result.register, src: fun)))
+      of Value:
+        result.value = fun
+      of Statement: discard
   of skIf:
     # the true location is immediately afterward so we don't really need it
     var branchRes =
