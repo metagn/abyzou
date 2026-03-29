@@ -99,6 +99,18 @@ proc evaluate*(stack: Memory, ins: Statement, effectHandler: EffectHandler = nil
     assert m.kind == vMemory
     result = run ins.addressSetValue
     m.memoryValue.set(ins.addressSetIndex, result)
+  of skPrepareSubmodule:
+    let submod = module.submodules[ins.submoduleIndex]
+    when false:
+      result = stack.get(ins.armStackFunctionVariable)
+      # XXX [function-arm] missing impl for linear function?
+      let oldFn = result.functionValue
+      let newFn = oldFn.shallowRefresh()
+      result = toValue newFn
+      # XXX [function-arm, needs-testing] the following should let it arm itself
+      stack.set(ins.armStackFunctionVariable, result)
+      for a, b in ins.armStackCaptures.items:
+        newFn.program.memory.set(a, stack.get(b))
   of skArmStack:
     result = stack.get(ins.armStackFunctionVariable)
     # XXX [function-arm] missing impl for linear function?

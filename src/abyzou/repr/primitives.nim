@@ -352,6 +352,7 @@ type
     skVariableGet, skVariableSet
     skAddressGet, skAddressSet
     skArmStack
+    skPrepareSubmodule
     # goto
     skIf, skWhile, skDoUntil
     # effect, can emulate goto
@@ -397,6 +398,8 @@ type
       armStackCaptures*: seq[tuple[index, valueIndex: int]]
         ## list of (variable in function stack, variable in local stack)
         ## only used for passing captures so the value is just a variable index
+    of skPrepareSubmodule:
+      submoduleIndex*: int
     of skIf:
       ifCond*, ifTrue*, ifFalse*: Statement
     of skWhile:
@@ -426,13 +429,15 @@ type
       binary1*, binary2*: Statement
   Statement* = ref StatementObj
 
+  StackIndex* = int
+
   Variable* = ref object
     id*: VariableId
     name*: string
     nameHash*: Hash
     hidden*: bool # unable to look up
     knownType*: Type
-    stackIndex*: int
+    stackIndex*: StackIndex
     scope* {.cursor.}: Scope
     genericParams*: seq[TypeParameter]
       # XXX [types] maybe make this a tuple type too with signature for named and default generic params
@@ -447,6 +452,23 @@ type
     Queued
     Compiling
     Compiled
+  
+  SubmoduleKind* = enum
+    SubmoduleLinearFunction
+    SubmoduleTreeWalkFunction
+  
+  Submodule* = object
+    value*: Module
+    location*: Variable
+    bodyBound*: TypeBound
+    captures*: seq[tuple[index, valueIndex: StackIndex]]
+    case kind*: SubmoduleKind
+    of SubmoduleLinearFunction:
+      linearFunctionValue*: LinearFunction
+        ## nil if module not compiled yet
+    of SubmoduleTreeWalkFunction:
+      treeWalkFunctionValue*: TreeWalkFunction
+        ## nil if module not compiled yet
 
   Module* = ref object
     ## current module or function
@@ -457,9 +479,9 @@ type
     source*: Expression
     origin*: Scope
       ## context closure is defined in
-    captures*: Table[Variable, int]
-    moduleCaptures*: Table[Module, int]
-    #submodules*: seq[Module]
+    captures*: Table[Variable, StackIndex]
+    moduleCaptures*: Table[Module, StackIndex]
+    submodules*: seq[Submodule] ## should not shrink
     top*: Scope
     memorySlots*: seq[StackSlot] ## should not shrink
     memory*: Memory

@@ -480,10 +480,14 @@ proc compile*(context: Context, ex: Expression): Statement {.inline.} =
   # context object is huge so dont use it yet
   result = compile(context.scope, ex, context.bound)
 
+proc compileSubmodule*(parent: Module, submodule: var Submodule)
+
 proc compile*(module: Module, bound: TypeBound = +AnyTy) =
   if not module.source.isNil:
     module.state = Compiling
     module.runtimeBody = compile(module.top, module.source, bound)
+  for submod in module.submodules.mitems:
+    compileSubmodule(module, submod)
   module.state = Compiled
 
 proc toLinear*(module: Module): LinearProgram =
@@ -502,6 +506,34 @@ proc toTreeWalk*(module: Module): TreeWalkProgram =
     instruction: module.runtimeBody,#copy(body),
     memory: module.memory.shallowRefresh(),
     thisIndex: module.moduleCaptures.getOrDefault(module, -1))
+
+proc compileSubmodule*(parent: Module, submodule: var Submodule) =
+  if submodule.value.state in {Created, Queued}:
+    compile(submodule.value, submodule.bodyBound)
+    for c, ci in submodule.value.captures:
+      submodule.captures.add((ci, parent.capture(c)))
+    if submodule.value in submodule.value.moduleCaptures:
+      submodule.captures.add((submodule.value.moduleCaptures[submodule.value], submodule.location.stackIndex))
+    case submodule.kind
+    of SubmoduleLinearFunction:
+      submodule.linearFunctionValue = LinearFunction(
+        program: submodule.value.toLinear(),
+        type: submodule.location.knownType)
+    of SubmoduleTreeWalkFunction:
+      submodule.treeWalkFunctionValue = TreeWalkFunction(
+        program: submodule.value.toTreeWalk(),
+        type: submodule.location.knownType)
+  assert submodule.value.state == Compiled
+  case submodule.kind
+  of SubmoduleLinearFunction:
+    assert not submodule.linearFunctionValue.isNil
+  of SubmoduleTreeWalkFunction:
+    assert not submodule.treeWalkFunctionValue.isNil
+
+when false:
+  proc compileSubmodule*(module: Module, index: int) =
+    assert index >= 0 and index < module.submodules.len
+    compileSubmodule(module, module.submodules[index])
 
 proc compile*(ex: Expression, imports: seq[Scope], bound: TypeBound = +AnyTy): Program =
   var module = newModule(source = ex, imports = imports)
