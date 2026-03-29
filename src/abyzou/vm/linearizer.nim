@@ -399,16 +399,15 @@ proc linearize*(module: Module, fn: LinearContext, result: var Result, s: Statem
       result.value = val
     of Statement: discard
   of skPrepareSubmodule:
-    let submod = module.submodules[s.submoduleIndex]
+    let submod = s.submodule # module.submodules[s.submoduleIndex]
     assert submod.value.state == Compiled
     let fun = fn.variableRegisters[submod.location.stackIndex]
-    let value =
-      case submod.kind
-      of SubmoduleLinearFunction: toValue submod.linearFunctionValue
-      of SubmoduleTreeWalkFunction: toValue submod.treeWalkFunctionValue
-    let constant = getConstant(fn, value)
-    fn.add(Instr(kind: LoadConstant, lc:
-      (res: fun, constant: constant)))
+    if false:
+      # already done
+      let value = module.memory.get(submod.location.stackIndex)
+      let constant = getConstant(fn, value)
+      fn.add(Instr(kind: LoadConstant, lc:
+        (res: fun, constant: constant)))
     if true or submod.captures.len != 0:
       # i dont know why this wouldnt always be done
       fn.add(Instr(kind: RefreshStack, rfs: (fun: fun)))

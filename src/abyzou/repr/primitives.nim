@@ -382,24 +382,24 @@ type
     of skSequence:
       sequence*: seq[Statement]
     of skVariableGet:
-      variableGetIndex*: int
+      variableGetIndex*: StackIndex
     of skVariableSet:
-      variableSetIndex*: int
+      variableSetIndex*: StackIndex
       variableSetValue*: Statement
     of skAddressGet:
       addressGetMemory*: Statement
-      addressGetIndex*: int
+      addressGetIndex*: StackIndex
     of skAddressSet:
       addressSetMemory*: Statement
-      addressSetIndex*: int
+      addressSetIndex*: StackIndex
       addressSetValue*: Statement
     of skArmStack:
-      armStackFunctionVariable*: int
-      armStackCaptures*: seq[tuple[index, valueIndex: int]]
+      armStackFunctionVariable*: StackIndex
+      armStackCaptures*: seq[tuple[index, valueIndex: StackIndex]]
         ## list of (variable in function stack, variable in local stack)
         ## only used for passing captures so the value is just a variable index
     of skPrepareSubmodule:
-      submoduleIndex*: int
+      submodule*: Submodule
     of skIf:
       ifCond*, ifTrue*, ifFalse*: Statement
     of skWhile:
@@ -457,18 +457,12 @@ type
     SubmoduleLinearFunction
     SubmoduleTreeWalkFunction
   
-  Submodule* = object
+  Submodule* = ref object
     value*: Module
     location*: Variable
     bodyBound*: TypeBound
     captures*: seq[tuple[index, valueIndex: StackIndex]]
-    case kind*: SubmoduleKind
-    of SubmoduleLinearFunction:
-      linearFunctionValue*: LinearFunction
-        ## nil if module not compiled yet
-    of SubmoduleTreeWalkFunction:
-      treeWalkFunctionValue*: TreeWalkFunction
-        ## nil if module not compiled yet
+    kind*: SubmoduleKind
 
   Module* = ref object
     ## current module or function

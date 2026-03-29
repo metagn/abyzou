@@ -516,19 +516,19 @@ proc compileSubmodule*(parent: Module, submodule: var Submodule) =
       submodule.captures.add((submodule.value.moduleCaptures[submodule.value], submodule.location.stackIndex))
     case submodule.kind
     of SubmoduleLinearFunction:
-      submodule.linearFunctionValue = LinearFunction(
+      parent.set(submodule.location, toValue LinearFunction(
         program: submodule.value.toLinear(),
-        type: submodule.location.knownType)
+        type: submodule.location.knownType))
     of SubmoduleTreeWalkFunction:
-      submodule.treeWalkFunctionValue = TreeWalkFunction(
+      parent.set(submodule.location, toValue TreeWalkFunction(
         program: submodule.value.toTreeWalk(),
-        type: submodule.location.knownType)
+        type: submodule.location.knownType))
   assert submodule.value.state == Compiled
   case submodule.kind
   of SubmoduleLinearFunction:
-    assert not submodule.linearFunctionValue.isNil
+    assert parent.get(submodule.location).kind == vLinearFunction
   of SubmoduleTreeWalkFunction:
-    assert not submodule.treeWalkFunctionValue.isNil
+    assert parent.get(submodule.location).kind == vFunction
 
 when false:
   proc compileSubmodule*(module: Module, index: int) =
