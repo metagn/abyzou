@@ -236,7 +236,7 @@ proc runOnStack*(lf: LinearProgram, stack: var Array[Value], effectPos: int) =
       let fn = get(instr.rfs.fun)
       case fn.kind
       of vFunction:
-        # XXX [function-arm, needs-testing] ??? uncommented should be correct but not tested
+        # XXX [function-arm, needs-testing] ??? commented should be correct but not tested
         #fn.functionValue.program.stack = fn.functionValue.program.stack.shallowRefresh()
         let oldFn = fn.functionValue
         getMut(instr.rfs.fun).functionValue = oldFn.shallowRefresh()

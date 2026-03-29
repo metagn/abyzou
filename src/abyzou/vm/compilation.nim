@@ -527,6 +527,7 @@ proc compileSubmodule*(parent: Module, submodule: var Submodule, location: Varia
       parent.set(location, toValue TreeWalkFunction(
         program: submodule.value.toTreeWalk(),
         type: location.knownType))
+  # could be submodule referred to by other submodule that is currently compiling:
   assert submodule.value.state in {Compiling, Compiled}, $submodule.value.state
   if submodule.value.state == Compiled:
     case submodule.kind

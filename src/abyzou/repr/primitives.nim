@@ -426,6 +426,8 @@ type
   Statement* = ref StatementObj
 
   StackIndex* = int
+    ## index of variable in module variable list,
+    ## currently also used for variable addresses (i.e. variable registers cannot overlap)
 
   Variable* = ref object
     id*: VariableId
@@ -437,8 +439,8 @@ type
     scope* {.cursor.}: Scope
     genericParams*: seq[TypeParameter]
       # XXX [types] maybe make this a tuple type too with signature for named and default generic params
-    isSubmodule*: bool
-    evaluated*: bool
+    isSubmodule*: bool # maybe use variable kind
+    evaluated*: bool # currently just a fast check for if submodule was compiled
 
   StackSlot* = object
     kind*: VariableReferenceKind
@@ -446,7 +448,7 @@ type
 
   ModuleState* = enum
     Created
-    Queued
+    Queued ## submodules marked as either this or `Created` will be lazy compiled
     Compiling
     Compiled
   
