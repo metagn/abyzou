@@ -39,7 +39,7 @@ template constant*(value: int32): Statement = constant(value, Int32Ty)
 template constant*(value: uint32): Statement = constant(value, Uint32Ty)
 template constant*(value: float32): Statement = constant(float32(value), Float32Ty)
 
-proc compileSubmodule*(parent: Module, submodule: var Submodule)
+proc compileSubmodule*(parent: Module, submodule: var Submodule, location: Variable)
 
 import ./modules
 export modules
@@ -486,8 +486,8 @@ proc compile*(module: Module, bound: TypeBound = +AnyTy) =
   if not module.source.isNil:
     module.state = Compiling
     module.runtimeBody = compile(module.top, module.source, bound)
-  for _, submod in module.submodules.mpairs:
-    compileSubmodule(module, submod)
+  for loc, submod in module.submodules.mpairs:
+    compileSubmodule(module, submod, loc)
   module.state = Compiled
 
 proc toLinear*(module: Module): LinearProgram =
@@ -507,38 +507,33 @@ proc toTreeWalk*(module: Module): TreeWalkProgram =
     memory: module.memory.shallowRefresh(),
     thisIndex: module.moduleCaptures.getOrDefault(module, -1))
 
-proc compileSubmodule*(parent: Module, submodule: var Submodule) =
+proc compileSubmodule*(parent: Module, submodule: var Submodule, location: Variable) =
   if submodule.value.state in {Created, Queued}:
     compile(submodule.value, submodule.bodyBound)
     for c, ci in submodule.value.captures:
       submodule.captures.add((ci, parent.capture(c)))
     if submodule.value in submodule.value.moduleCaptures:
-      submodule.captures.add((submodule.value.moduleCaptures[submodule.value], submodule.location.stackIndex))
+      submodule.captures.add((submodule.value.moduleCaptures[submodule.value], location.stackIndex))
     case submodule.kind
     of SubmoduleLinearFunction:
       if submodule.inferReturnType:
-        submodule.location.knownType.nativeArgs[1] = submodule.value.runtimeBody.knownType
-      parent.set(submodule.location, toValue LinearFunction(
+        location.knownType.nativeArgs[1] = submodule.value.runtimeBody.knownType
+      parent.set(location, toValue LinearFunction(
         program: submodule.value.toLinear(),
-        type: submodule.location.knownType))
+        type: location.knownType))
     of SubmoduleTreeWalkFunction:
       if submodule.inferReturnType:
-        submodule.location.knownType.nativeArgs[1] = submodule.value.runtimeBody.knownType
-      parent.set(submodule.location, toValue TreeWalkFunction(
+        location.knownType.nativeArgs[1] = submodule.value.runtimeBody.knownType
+      parent.set(location, toValue TreeWalkFunction(
         program: submodule.value.toTreeWalk(),
-        type: submodule.location.knownType))
+        type: location.knownType))
   assert submodule.value.state in {Compiling, Compiled}, $submodule.value.state
   if submodule.value.state == Compiled:
     case submodule.kind
     of SubmoduleLinearFunction:
-      assert parent.get(submodule.location).kind == vLinearFunction
+      assert parent.get(location).kind == vLinearFunction
     of SubmoduleTreeWalkFunction:
-      assert parent.get(submodule.location).kind == vFunction
-
-when false:
-  proc compileSubmodule*(module: Module, index: int) =
-    assert index >= 0 and index < module.submodules.len
-    compileSubmodule(module, module.submodules[index])
+      assert parent.get(location).kind == vFunction
 
 proc compile*(ex: Expression, imports: seq[Scope], bound: TypeBound = +AnyTy): Program =
   var module = newModule(source = ex, imports = imports)

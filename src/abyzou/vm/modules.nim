@@ -124,10 +124,11 @@ import ./compilation
 
 proc getType*(variable: Variable): Type =
   when false:
+    # maybe submodules could be used for "lazy variables"
     if variable.knownType.isNoType and not variable.lazyExpression.isNil and not variable.evaluated:
       variable.setStatic(variable.lazyExpression)
   if variable.isSubmodule and not variable.evaluated:
-    compileSubmodule(variable.scope.module, variable.scope.module.submodules[variable])
+    compileSubmodule(variable.scope.module, variable.scope.module.submodules[variable], variable)
   variable.knownType
 
 proc evaluateStatic*(scope: Scope, ex: Expression, bound: TypeBound = +AnyTy): Value =

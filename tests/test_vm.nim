@@ -240,7 +240,13 @@ c = foo()
 @foo = (a: Int) => if(a > 10, a, else: bar(a * 2))
 @bar = (a: Int) => if(a > 10, a, else: foo(a * 3))
 foo(1)
-""": toValue(12)
+""": toValue(12),
+    """
+@foo = (a: Int) => if(a > 100, a, else: bar(a * 2))
+@bar = (a: Int) => if(a > 100, a, else: baz(a * 3))
+@baz = (a: Int) => if(a > 100, a, else: foo(a * 5))
+foo(1)
+""": toValue(180),
   }
 
   for inp, outp in tests.items:

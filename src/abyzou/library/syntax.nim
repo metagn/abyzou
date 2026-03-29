@@ -57,51 +57,15 @@ module syntax:
       v = newVariable("_lambda", fnType)
       v.hidden = true
       scope.define(v)
-    if true:
-      v.isSubmodule = true
-      var submod = Submodule(
-        value: bodyModule,
-        location: v,
-        bodyBound: returnBound,
-        kind: if useBytecode: SubmoduleLinearFunction else: SubmoduleTreeWalkFunction)
-      if not returnBoundSet:
-        submod.inferReturnType = true
-      scope.module.submodules[v] = submod
-      result = Statement(kind: skPrepareSubmodule, submodule: submod, knownType: fnType)
-    else: 
-      compile(bodyModule, returnBound)
-      if not v.isNil and not returnBoundSet:
-        v.knownType.nativeArgs[1] = bodyModule.runtimeBody.knownType
-      var fun: Value
-      if useBytecode:
-        fun = toValue(LinearFunction(
-          program: bodyModule.toLinear(),
-          type: fnType))
-      else:
-        fun = toValue(TreeWalkFunction(
-          program: bodyModule.toTreeWalk(),
-          type: fnType))
-      setTypeIfBoxed(fun, fnType)
-      var captures: seq[tuple[index, valueIndex: int]]
-      for c, ci in bodyModule.captures:
-        captures.add((ci, bodyModule.origin.module.capture(c)))
-      let variableCaptures = captures.len
-      if bodyModule in bodyModule.moduleCaptures:
-        captures.add((bodyModule.moduleCaptures[bodyModule], v.stackIndex))
-      result = constant(fun, fnType)
-      if not v.isNil:
-        if variableCaptures == 0:
-          # allow static module memory to be captured
-          scope.module.set(v, fun)
-        # required so that recursive functions can capture themselves in next statement:
-        result = variableSet(scope.module, v.shallowReference, result) # , source = lhs
-      if captures.len != 0:
-        result = Statement(kind: skSequence, knownType: fnType, sequence: @[
-          result, 
-          Statement(kind: skArmStack,
-            knownType: fnType,
-            armStackFunctionVariable: v.stackIndex,
-            armStackCaptures: captures)])
+    v.isSubmodule = true
+    let submod = Submodule(
+      value: bodyModule,
+      stackIndex: v.stackIndex,
+      kind: if useBytecode: SubmoduleLinearFunction else: SubmoduleTreeWalkFunction,
+      bodyBound: returnBound,
+      inferReturnType: not returnBoundSet)
+    scope.module.submodules[v] = submod
+    result = Statement(kind: skPrepareSubmodule, submodule: submod, knownType: fnType)
 
   templ "=>", 2:
     let scope = context.scope

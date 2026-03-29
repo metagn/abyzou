@@ -351,7 +351,6 @@ type
     # stack
     skVariableGet, skVariableSet
     skAddressGet, skAddressSet
-    skArmStack
     skPrepareSubmodule
     # goto
     skIf, skWhile, skDoUntil
@@ -393,13 +392,10 @@ type
       addressSetMemory*: Statement
       addressSetIndex*: StackIndex
       addressSetValue*: Statement
-    of skArmStack:
-      armStackFunctionVariable*: StackIndex
-      armStackCaptures*: seq[tuple[index, valueIndex: StackIndex]]
-        ## list of (variable in function stack, variable in local stack)
-        ## only used for passing captures so the value is just a variable index
     of skPrepareSubmodule:
+      ## arms a function with captures etc
       submodule*: Submodule
+        ## ref object, `captures` field is only set after the module is fully compiled if the submodule is lazy compiled
     of skIf:
       ifCond*, ifTrue*, ifFalse*: Statement
     of skWhile:
@@ -459,12 +455,17 @@ type
     SubmoduleTreeWalkFunction
   
   Submodule* = ref object
+    ## ref so the captures can be updated for codegen after a statement with this is generated
     value*: Module
-    location*: Variable
-    bodyBound*: TypeBound
+      ## can compile after the main module is compiled
+    stackIndex*: StackIndex
     captures*: seq[tuple[index, valueIndex: StackIndex]]
+      ## list of (variable in submodule stack, variable in local stack)
+      ## only used for passing captures so the value is just a variable index
+      ## is filled after the submodule is compiled
     case kind*: SubmoduleKind
     of SubmoduleLinearFunction, SubmoduleTreeWalkFunction:
+      bodyBound*: TypeBound
       inferReturnType*: bool
 
   Module* = ref object
