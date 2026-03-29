@@ -480,14 +480,33 @@ proc compile*(context: Context, ex: Expression): Statement {.inline.} =
   # context object is huge so dont use it yet
   result = compile(context.scope, ex, context.bound)
 
+proc compile*(module: Module, bound: TypeBound = +AnyTy) =
+  if not module.source.isNil:
+    module.state = Compiling
+    module.runtimeBody = compile(module.top, module.source, bound)
+  module.state = Compiled
+
+proc toLinear*(module: Module): LinearProgram =
+  if module.runtimeBody.isNil:
+    # could be another error type
+    raise newException(CompileError, "cannot compile function from module without runtime body")
+  let lc = linear(module, module.runtimeBody)
+  result = lc.toFunction()
+
+proc toTreeWalk*(module: Module): TreeWalkProgram =
+  if module.runtimeBody.isNil:
+    # could be another error type
+    raise newException(CompileError, "cannot compile function from module without runtime body")
+  #let body2 = [body][0]#copy(body) # weird orc bug workaround
+  result = TreeWalkProgram(
+    instruction: module.runtimeBody,#copy(body),
+    memory: module.memory.shallowRefresh(),
+    thisIndex: module.moduleCaptures.getOrDefault(module, -1))
+
 proc compile*(ex: Expression, imports: seq[Scope], bound: TypeBound = +AnyTy): Program =
-  var module = newModule(imports = imports)
-  let body = compile(module.top, ex, bound)
+  var module = newModule(source = ex, imports = imports)
+  compile(module, bound)
   if useBytecode:
-    let lc = linear(module, body)
-    result = Program(kind: Linear, linear: lc.toFunction())
+    result = Program(kind: Linear, linear: toLinear(module))
   else:
-    result = Program(kind: TreeWalk, tw: TreeWalkProgram(
-      instruction: body,#copy(body),
-      memory: module.memory.shallowRefresh(),
-      thisIndex: module.moduleCaptures.getOrDefault(module, -1)))
+    result = Program(kind: TreeWalk, tw: toTreeWalk(module))

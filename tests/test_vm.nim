@@ -246,7 +246,7 @@ c = foo()
       let ex = parse(inp)
       echo ex
       when false:
-        var module = newModule(imports = @[Prelude])
+        var module = newModule(source = ex, imports = @[Prelude])
         let body = compile(module.top, ex, +AnyTy)
         echo body
       if getCurrentException() of ref NoOverloadFoundError:

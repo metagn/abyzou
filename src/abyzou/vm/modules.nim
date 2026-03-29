@@ -6,14 +6,14 @@ import std/[algorithm, hashes, tables],
 proc newVariable*(name: string, knownType: Type = NoType): Variable =
   Variable(id: newVariableId(), name: name, nameHash: name.hash, knownType: knownType)
 
-proc newModule*(parent: Scope = nil, imports: seq[Scope] = @[]): Module =
+proc newModule*(source: Expression, parent: Scope = nil, imports: seq[Scope] = @[]): Module =
   # XXX [modules] use module registry
-  result = Module(id: newModuleId(), origin: parent)
+  result = Module(id: newModuleId(), origin: parent, source: source, state: Created)
   result.top = Scope(module: result, imports: imports)
   result.memory = newMemory()
 
-proc childModule*(scope: Scope): Module =
-  result = newModule(parent = scope)
+proc childModule*(scope: Scope, source: Expression): Module =
+  result = newModule(source = source, parent = scope)
 
 proc childScope*(scope: Scope): Scope =
   result = Scope(parent: scope, module: scope.module)
@@ -53,8 +53,9 @@ proc evaluateStatic*(scope: Scope, ex: Expression, bound: TypeBound = +AnyTy): V
 proc setStatic*(variable: Variable, expression: Expression)
 
 proc getType*(variable: Variable): Type =
-  if variable.knownType.isNoType and not variable.lazyExpression.isNil and not variable.evaluated:
-    variable.setStatic(variable.lazyExpression)
+  when false:
+    if variable.knownType.isNoType and not variable.lazyExpression.isNil and not variable.evaluated:
+      variable.setStatic(variable.lazyExpression)
   variable.knownType
 
 proc shallowReference*(v: Variable, `type`: Type = v.getType): VariableReference {.inline.} =

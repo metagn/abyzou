@@ -2,8 +2,8 @@ import
   std/tables,
   ../defines,
   ../lang/[expressions, shortstring],
-  ../repr/[primitives, typebasics, valueconstr, memory],
-  ../vm/[compilation, linearizer]
+  ../repr/[primitives, typebasics, valueconstr],
+  ../vm/compilation
 
 import common
 
@@ -33,7 +33,7 @@ module syntax:
 
   proc makeFn(scope: Scope, arguments: seq[Expression], body: Expression,
     name: string, returnBound: TypeBound, returnBoundSet: bool): Statement =
-    let bodyModule = scope.childModule()
+    let bodyModule = scope.childModule(body)
     let bodyScope = bodyModule.top
     var fnTypeArguments = Type(kind: tyTuple, elements: newSeq[Type](arguments.len))
     for i in 0 ..< arguments.len:
@@ -57,23 +57,17 @@ module syntax:
       v = newVariable("_lambda", fnType)
       v.hidden = true
       scope.define(v)
-    let body = bodyScope.compile(body, returnBound)
+    compile(bodyModule, returnBound)
     if not v.isNil and not returnBoundSet:
-      v.knownType.nativeArgs[1] = body.knownType
+      v.knownType.nativeArgs[1] = bodyModule.runtimeBody.knownType
     var fun: Value
     if useBytecode:
-      let lc = linear(bodyScope.module, body)
       fun = toValue(LinearFunction(
-        program: lc.toFunction(),
+        program: bodyModule.toLinear(),
         type: fnType))
     else:
-      let body2 = [body][0]#copy(body) # weird orc bug workaround
-      let tw = TreeWalkProgram(
-        memory: bodyScope.module.memory.shallowRefresh(),
-        instruction: body2,
-        thisIndex: bodyScope.module.moduleCaptures.getOrDefault(bodyScope.module, -1))
       fun = toValue(TreeWalkFunction(
-        program: tw,
+        program: bodyModule.toTreeWalk(),
         type: fnType))
     setTypeIfBoxed(fun, fnType)
     var captures: seq[tuple[index, valueIndex: int]]

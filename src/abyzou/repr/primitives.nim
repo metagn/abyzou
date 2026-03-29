@@ -436,26 +436,34 @@ type
     scope* {.cursor.}: Scope
     genericParams*: seq[TypeParameter]
       # XXX [types] maybe make this a tuple type too with signature for named and default generic params
-    lazyExpression*: Expression
-      # XXX [modules] actually use this for easy mutual recursion
     evaluated*: bool
 
   StackSlot* = object
     kind*: VariableReferenceKind
     variable*: Variable
 
+  ModuleState* = enum
+    Created
+    Queued
+    Compiling
+    Compiled
+
   Module* = ref object
     ## current module or function
-    ## should not contain any "temporary" compilation constructs but it works out that nothing temporary really needs to stay saved
+    ## should not contain any "temporary" compilation constructs but it works out that everything can stay saved
     id*: ModuleId
     name*: string
+    state*: ModuleState
+    source*: Expression
     origin*: Scope
       ## context closure is defined in
     captures*: Table[Variable, int]
     moduleCaptures*: Table[Module, int]
+    #submodules*: seq[Module]
     top*: Scope
     memorySlots*: seq[StackSlot] ## should not shrink
     memory*: Memory
+    runtimeBody*: Statement ## nil until fully compiled
 
   Scope* = ref object
     ## restricted subset of variables in a context
