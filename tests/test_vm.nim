@@ -234,6 +234,13 @@ static
   b = foo()
 c = foo()
 [a.getter.(), b.getter.(), c.getter.()]""": toValue(@[toValue(3), toValue(1), toValue(1)]),
+
+    # mutual recursion, requires pinning i think:
+    """
+@foo = (a: Int) => if(a > 10, a, else: bar(a * 2))
+@bar = (a: Int) => if(a > 10, a, else: foo(a * 3))
+foo(1)
+""": toValue(12)
   }
 
   for inp, outp in tests.items:

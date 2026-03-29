@@ -39,6 +39,8 @@ template constant*(value: int32): Statement = constant(value, Int32Ty)
 template constant*(value: uint32): Statement = constant(value, Uint32Ty)
 template constant*(value: float32): Statement = constant(float32(value), Float32Ty)
 
+proc compileSubmodule*(parent: Module, submodule: var Submodule)
+
 import ./modules
 export modules
 
@@ -480,13 +482,11 @@ proc compile*(context: Context, ex: Expression): Statement {.inline.} =
   # context object is huge so dont use it yet
   result = compile(context.scope, ex, context.bound)
 
-proc compileSubmodule*(parent: Module, submodule: var Submodule)
-
 proc compile*(module: Module, bound: TypeBound = +AnyTy) =
   if not module.source.isNil:
     module.state = Compiling
     module.runtimeBody = compile(module.top, module.source, bound)
-  for submod in module.submodules.mitems:
+  for _, submod in module.submodules.mpairs:
     compileSubmodule(module, submod)
   module.state = Compiled
 
@@ -516,19 +516,24 @@ proc compileSubmodule*(parent: Module, submodule: var Submodule) =
       submodule.captures.add((submodule.value.moduleCaptures[submodule.value], submodule.location.stackIndex))
     case submodule.kind
     of SubmoduleLinearFunction:
+      if submodule.inferReturnType:
+        submodule.location.knownType.nativeArgs[1] = submodule.value.runtimeBody.knownType
       parent.set(submodule.location, toValue LinearFunction(
         program: submodule.value.toLinear(),
         type: submodule.location.knownType))
     of SubmoduleTreeWalkFunction:
+      if submodule.inferReturnType:
+        submodule.location.knownType.nativeArgs[1] = submodule.value.runtimeBody.knownType
       parent.set(submodule.location, toValue TreeWalkFunction(
         program: submodule.value.toTreeWalk(),
         type: submodule.location.knownType))
-  assert submodule.value.state == Compiled
-  case submodule.kind
-  of SubmoduleLinearFunction:
-    assert parent.get(submodule.location).kind == vLinearFunction
-  of SubmoduleTreeWalkFunction:
-    assert parent.get(submodule.location).kind == vFunction
+  assert submodule.value.state in {Compiling, Compiled}, $submodule.value.state
+  if submodule.value.state == Compiled:
+    case submodule.kind
+    of SubmoduleLinearFunction:
+      assert parent.get(submodule.location).kind == vLinearFunction
+    of SubmoduleTreeWalkFunction:
+      assert parent.get(submodule.location).kind == vFunction
 
 when false:
   proc compileSubmodule*(module: Module, index: int) =

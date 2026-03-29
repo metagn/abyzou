@@ -441,6 +441,7 @@ type
     scope* {.cursor.}: Scope
     genericParams*: seq[TypeParameter]
       # XXX [types] maybe make this a tuple type too with signature for named and default generic params
+    isSubmodule*: bool
     evaluated*: bool
 
   StackSlot* = object
@@ -462,7 +463,9 @@ type
     location*: Variable
     bodyBound*: TypeBound
     captures*: seq[tuple[index, valueIndex: StackIndex]]
-    kind*: SubmoduleKind
+    case kind*: SubmoduleKind
+    of SubmoduleLinearFunction, SubmoduleTreeWalkFunction:
+      inferReturnType*: bool
 
   Module* = ref object
     ## current module or function
@@ -475,7 +478,7 @@ type
       ## context closure is defined in
     captures*: Table[Variable, StackIndex]
     moduleCaptures*: Table[Module, StackIndex]
-    submodules*: seq[Submodule] ## should not shrink
+    submodules*: OrderedTable[Variable, Submodule] ## should not shrink
     top*: Scope
     memorySlots*: seq[StackSlot] ## should not shrink
     memory*: Memory

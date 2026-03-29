@@ -52,11 +52,7 @@ proc evaluateStatic*(scope: Scope, ex: Expression, bound: TypeBound = +AnyTy): V
 
 proc setStatic*(variable: Variable, expression: Expression)
 
-proc getType*(variable: Variable): Type =
-  when false:
-    if variable.knownType.isNoType and not variable.lazyExpression.isNil and not variable.evaluated:
-      variable.setStatic(variable.lazyExpression)
-  variable.knownType
+proc getType*(variable: Variable): Type
 
 proc shallowReference*(v: Variable, `type`: Type = v.getType): VariableReference {.inline.} =
   let kind = v.scope.module.memorySlots[v.stackIndex].kind
@@ -125,6 +121,14 @@ proc overloads*(scope: Scope, name: string, bound: TypeBound): seq[VariableRefer
 proc resolve*(scope: Scope, ex: Expression, name: string, bound: TypeBound): VariableReference
 
 import ./compilation
+
+proc getType*(variable: Variable): Type =
+  when false:
+    if variable.knownType.isNoType and not variable.lazyExpression.isNil and not variable.evaluated:
+      variable.setStatic(variable.lazyExpression)
+  if variable.isSubmodule and not variable.evaluated:
+    compileSubmodule(variable.scope.module, variable.scope.module.submodules[variable])
+  variable.knownType
 
 proc evaluateStatic*(scope: Scope, ex: Expression, bound: TypeBound = +AnyTy): Value =
   scope.module.evaluateStatic(scope.compile(ex, bound))
