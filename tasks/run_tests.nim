@@ -5,7 +5,7 @@ when not declared(runTests):
   {.fatal: "tests task not implemented, need nimbleutils".}
 
 var comboMatrix = [
-  @["--mm:orc", "-mm:refc"],
+  @["--mm:orc", "--mm:refc"],
   @["-d:abyzou.bytecode=true", "-d:abyzou.bytecode=false"],
   @["-d:abyzou.largeValue=true", "-d:abyzou.largeValue=false"]
   #"--gc:orc -d:useMalloc",
