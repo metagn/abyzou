@@ -247,7 +247,10 @@ type
     rest*: Properties
 
   Type* = object
-    # XXX [types] 90 bytes - change these tables out for something smaller
+    # XXX [types] 90 bytes
+      # - change these tables out for something smaller
+      # - array instead of seq
+      # - maybe pointer tag TypeBase with the type kind
     properties*: Table[TypeBase, Type]
       # XXX [types] redo these
       # can be a multitable later on
@@ -282,8 +285,7 @@ type
     of tyParameter:
       parameter*: TypeParameter
     of tyValue:
-      value*: Value
-      valueType*: Box[Type]
+      valueType*: BoxedValue[Value]
 
   TypeBound* = object
     boundType*: Type

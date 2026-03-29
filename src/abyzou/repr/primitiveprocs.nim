@@ -173,7 +173,7 @@ proc `$`*(t: Type): string =
   of tyNativeBase: "Base(" & $t.nativeBase & ")"
   of tySomeValue: "SomeValue(" & $t.someValueType & ")"
   of tyParameter: "Parameter(" & $t.parameter.name & ")"
-  of tyValue: "Value(" & $t.value & ": " & $t.valueType & ")"
+  of tyValue: "Value(" & $t.valueType.value & ": " & $t.valueType.type & ")"
   of noArgNativeTypes: $t.kind
   of argNativeTypes: $t.kind & "(" & $t.nativeArgs & ")"
   if t.properties.len != 0:

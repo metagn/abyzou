@@ -103,7 +103,7 @@ proc checkType*(value: Value, t: Type): bool =
   of tyNot: not value.checkType(t.notType.unbox)
   of tySomeValue: false
   of tyParameter: value.checkType(t.parameter.bound.boundType)
-  of tyValue: value.checkType(t.valueType.unbox) and t.value == value
+  of tyValue: value.checkType(t.valueType.type) and t.valueType.value == value
   if result:
     for p, args in t.properties:
       if not p.valueMatcher.isNil:

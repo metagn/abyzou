@@ -275,7 +275,7 @@ proc fillParameters*(pattern: var Type, table: ParameterInstantiation) =
   of tyNot:
     fill(pattern.notType)
   of tyValue:
-    fill(pattern.valueType)
+    fill(pattern.valueType.type)
   of tySomeValue:
     fill(pattern.someValueType)
   for a, v in pattern.properties.mpairs:

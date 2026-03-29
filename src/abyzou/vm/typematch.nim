@@ -352,7 +352,7 @@ proc match*(matcher, t: Type, inst: var ParameterInstantiation): TypeMatch =
     of tyValue:
       minLevel(
         tmSimilar,
-        match(+matcher.someValueType.unbox, t.valueType.unbox))
+        match(+matcher.someValueType.unbox, t.valueType.type))
     else: atomicMatch(tmNone)
   of tyParameter:
     let param = matcher.parameter
@@ -376,8 +376,8 @@ proc match*(matcher, t: Type, inst: var ParameterInstantiation): TypeMatch =
   of tyValue:
     case t.kind
     of tyValue:
-      let tm = match(matcher.valueType.unbox, t.valueType.unbox)
-      if not tm.matches or matcher.value != t.value:
+      let tm = match(matcher.valueType.type, t.valueType.type)
+      if not tm.matches or matcher.valueType.value != t.valueType.value:
         atomicMatch(tmNone)
       else: tm
     of tySomeValue: atomicMatch(tmUnknown)
