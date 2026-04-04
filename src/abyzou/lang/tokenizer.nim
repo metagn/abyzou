@@ -1,6 +1,6 @@
 import
   std/strutils,
-  hemodyne/syncvein,
+  flue/load_buffer,
   ../defines,
   ./[number, shortstring, tokens, info]
 
@@ -47,7 +47,7 @@ type
 
   Tokenizer* = ref object
     options*: TokenizerOptions
-    vein*: Vein ## input buffer
+    buffer*: LoadBuffer
     indentContexts*: seq[IndentContext]
     lastKind*: TokenKind
     queueMode*: QueueMode
@@ -76,25 +76,25 @@ proc resetTokenizer*(tz: var Tokenizer) =
   tz.indentContexts = @[IndentContext()]
 
 proc newTokenizer*(str: sink string = "", options = defaultOptions()): Tokenizer =
-  result = Tokenizer(vein: initVein(str), options: options)
+  result = Tokenizer(buffer: initLoadBuffer(str), options: options)
   result.resetTokenizer()
 
 proc newTokenizer*(loader: proc(): string, options = defaultOptions()): Tokenizer =
-  result = Tokenizer(vein: initVein(loader), options: options)
+  result = Tokenizer(buffer: initLoadBuffer(loader), options: options)
   result.resetTokenizer()
 
 proc loadBufferOne(tz: var Tokenizer) =
-  let remove = tz.vein.loadBufferOne()
+  let remove = tz.buffer.loadOnce()
   tz.pos -= remove
   tz.previousPos -= remove
 
 proc peekCharOrZero(tz: var Tokenizer): char =
-  if tz.pos < tz.vein.buffer.len:
-    result = tz.vein.buffer[tz.pos]
+  if tz.pos < tz.buffer.data.len:
+    result = tz.buffer.data[tz.pos]
   else:
     tz.loadBufferOne()
-    if tz.pos < tz.vein.buffer.len:
-      result = tz.vein.buffer[tz.pos]
+    if tz.pos < tz.buffer.data.len:
+      result = tz.buffer.data[tz.pos]
     else:
       result = '\0'
 
@@ -113,12 +113,12 @@ proc nextRune*(tz: var Tokenizer): bool =
   when doLineColumn:
     tz.previousCol = tz.cl
   let c =
-    if tz.pos < tz.vein.buffer.len:
-      tz.vein.buffer[tz.pos]
+    if tz.pos < tz.buffer.data.len:
+      tz.buffer.data[tz.pos]
     else:
       tz.loadBufferOne()
-      if tz.pos < tz.vein.buffer.len:
-        tz.vein.buffer[tz.pos]
+      if tz.pos < tz.buffer.data.len:
+        tz.buffer.data[tz.pos]
       else:
         return false
   if c == '\r' and (inc tz.pos;
@@ -131,10 +131,22 @@ proc nextRune*(tz: var Tokenizer): bool =
       tz.cl = 0
   else:
     when useUnicode:
-      let remove = tz.vein.loadBufferRuneStart(c)
+      let b = c.byte
+      var n = 0
+      if b shr 5 == 0b110:
+        n = 1
+      elif b shr 4 == 0b1110:
+        n = 2
+      elif b shr 3 == 0b11110:
+        n = 3
+      elif b shr 2 == 0b111110:
+        n = 4
+      elif b shr 1 == 0b1111110:
+        n = 5
+      let remove = tz.buffer.loadBy(n)
       tz.pos -= remove
       tz.previousPos -= remove
-      fastRuneAt(tz.vein.buffer, tz.pos, tz.currentRune, true)
+      fastRuneAt(tz.buffer.data, tz.pos, tz.currentRune, true)
     else:
       tz.currentRune = c
       inc tz.pos
@@ -144,7 +156,7 @@ proc nextRune*(tz: var Tokenizer): bool =
         tz.cl = 0
       else:
         tz.cl += 1
-  tz.vein.setFreeBefore(tz.previousPos)
+  tz.buffer.freeBefore = tz.previousPos
   result = true
 
 iterator runes*(tz: var Tokenizer): Rune =
@@ -204,7 +216,7 @@ proc recordNumber*(tz: var Tokenizer, negative = false): NumberRepr =
     if prevPosSet:
       # would be prevPos2, but we can't keep track of how much the buffer shifts left
       # (unless we move this logic inside the tokenizer)
-      tz.vein.resetFreeBefore()
+      tz.buffer.freeBefore = 0
     case stage
     of inBase:
       let ch = c.asChar
@@ -222,14 +234,14 @@ proc recordNumber*(tz: var Tokenizer, negative = false): NumberRepr =
         when doLineColumn:
           prevCol2 = tz.previousCol
         prevPosSet = true
-        tz.vein.resetFreeBefore()
+        tz.buffer.freeBefore = 0
       of 'e', 'E':
         stage = inExpStart
         prevPos2 = tz.previousPos
         when doLineColumn:
           prevCol2 = tz.previousCol
         prevPosSet = true
-        tz.vein.resetFreeBefore()
+        tz.buffer.freeBefore = 0
       of 'i', 'I':
         result.kind = Integer
         stage = inBits
@@ -270,7 +282,7 @@ proc recordNumber*(tz: var Tokenizer, negative = false): NumberRepr =
         when doLineColumn:
           prevCol2 = tz.previousCol
         prevPosSet = true
-        tz.vein.resetFreeBefore()
+        tz.buffer.freeBefore = 0
       else:
         tz.resetPos()
         return
