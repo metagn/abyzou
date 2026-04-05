@@ -1,6 +1,6 @@
 import
   std/strutils,
-  flue/load_buffer,
+  fleu/load_buffer,
   ../defines,
   ./[number, shortstring, tokens, info]
 
