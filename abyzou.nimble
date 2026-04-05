@@ -14,7 +14,7 @@ skipDirs      = @["src/abyzou/disabled"]
 requires "nim >= 2.0.0"
 requires "skinsuit >= 0.2.3"
 requires "manta"
-requires "https://github.com/metagn/hemodyne"
+requires "https://github.com/holo-nim/fleu"
 
 
 task docs, "build docs for all modules":
